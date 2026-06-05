@@ -2,6 +2,7 @@ import { generateSpriteStyles, generateSpriteAction, callOpenAIEdit } from './ap
 import { getState, updateState, updateUIState } from './state.js';
 import { STYLE_PROMPTS, ACTION_PROMPTS, generateSpritePrompt } from './prompts.js';
 import { CostCalculator } from './costCalculator.js';
+import { pixelSnapImage, validatePixelArtImage } from './image/index.js';
 
 // Global framePrompts map to store custom prompts for each frame
 window.framePrompts = window.framePrompts || new Map();
@@ -164,68 +165,73 @@ document.addEventListener('DOMContentLoaded', () => {
           // Create an image element to draw to canvas
           const img = new Image();
           img.onload = function() {
-            // Create canvas
             const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            // Set to standard size
-            canvas.width = STANDARD_IMAGE_WIDTH;
-            canvas.height = STANDARD_IMAGE_HEIGHT;
-            
-            // Fill with transparent background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-            ctx.fillRect(0, 0, STANDARD_IMAGE_WIDTH, STANDARD_IMAGE_HEIGHT);
-            
-            // Draw image centered and scaled to fit
-            const scale = Math.min(
-              STANDARD_IMAGE_WIDTH / img.width,
-              STANDARD_IMAGE_HEIGHT / img.height
+            canvas.width = img.width;
+            canvas.height = img.height;
+
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = false;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+
+            const source = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const snapped = pixelSnapImage(
+              {
+                width: source.width,
+                height: source.height,
+                data: new Uint8ClampedArray(source.data),
+              },
+              {
+                outputWidth: STANDARD_IMAGE_WIDTH,
+                outputHeight: STANDARD_IMAGE_HEIGHT,
+                target: '#00FF00',
+                reduceMixels: true,
+                cleanGreenFringe: true,
+                finalExport: false,
+              }
             );
-            
-            const scaledWidth = img.width * scale;
-            const scaledHeight = img.height * scale;
-            const x = (STANDARD_IMAGE_WIDTH - scaledWidth) / 2;
-            const y = (STANDARD_IMAGE_HEIGHT - scaledHeight) / 2;
-            
-            // Use better image smoothing
-            ctx.imageSmoothingEnabled = true;
-            ctx.imageSmoothingQuality = 'high';
-            ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-            
-            // Convert to PNG blob with compression
-            canvas.toBlob(function(blob) {
-              // Create a File object from the blob
-              const pngFile = new File([blob], 'image.png', { 
+
+            const validation = validatePixelArtImage(snapped, {
+              backgroundThreshold: 0.7,
+            });
+            validation.warnings.forEach((warning) => {
+              console.warn(`Sprite validation warning [${warning.code}]: ${warning.message}`);
+            });
+
+            const snappedCanvas = document.createElement('canvas');
+            snappedCanvas.width = snapped.width;
+            snappedCanvas.height = snapped.height;
+            const snappedCtx = snappedCanvas.getContext('2d');
+            snappedCtx.putImageData(new ImageData(snapped.data, snapped.width, snapped.height), 0, 0);
+
+            snappedCanvas.toBlob(function(blob) {
+              const pngFile = new File([blob], 'image.png', {
                 type: 'image/png',
                 lastModified: Date.now()
               });
-              
-              // Log size reduction
+
               console.log('Image processing complete:', {
                 originalSize: file.size,
                 newSize: pngFile.size,
                 originalDimensions: `${img.width}x${img.height}`,
-                newDimensions: `${scaledWidth}x${scaledHeight}`,
-                finalDimensions: `${STANDARD_IMAGE_WIDTH}x${STANDARD_IMAGE_HEIGHT}`
+                finalDimensions: `${snapped.width}x${snapped.height}`,
+                nativeGrid: snapped.meta?.nativeGrid,
+                validationWarnings: validation.warnings.length
               });
-              
-              // Update state with PNG file
+
               updateState({ uploadedImage: pngFile });
-              
-              // Show preview
+
               const previewContainer = document.getElementById('imagePreview');
               const previewImage = document.getElementById('previewImage');
               if (previewContainer && previewImage) {
                 previewImage.src = URL.createObjectURL(blob);
                 previewContainer.classList.remove('hidden');
               }
-              
-              // Enable generate button if we have an API key
-              const state = getState();
-              if (generateStylesBtn && state.apiKey) {
+
+              if (generateStylesBtn) {
                 generateStylesBtn.disabled = false;
               }
-            }, 'image/png', 0.8); // Added compression quality
+            }, 'image/png', 1.0);
           };
           img.src = e.target.result;
         };
@@ -251,14 +257,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // The wizard.js now handles style generation with the generateSingleStyle function
   const handleGenerateStyles = async function() {
     try {
-      // Validate API key
-      const state = getState();
-      if (!state.apiKey) {
-        alert('Please enter your OpenAI API key');
-        apiKeyInput.focus();
-        return;
-      }
-
       // This function is now a no-op since we're generating styles on-demand
       // when the user clicks on a style card
       console.log('Style generation now happens when a style is selected');

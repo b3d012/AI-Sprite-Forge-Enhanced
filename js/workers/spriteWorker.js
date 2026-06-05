@@ -1,62 +1,56 @@
-// Web Worker for handling sprite generation API calls
-let apiKey = null;
+let defaultModel = 'gpt-image-1';
 
 self.onmessage = async function(e) {
   const { type, payload } = e.data;
-  
+
   switch (type) {
     case 'INIT':
-      apiKey = payload.apiKey;
+      defaultModel = payload?.model || defaultModel;
       break;
-      
+
     case 'GENERATE_FRAME':
       try {
-        const { styleId, actionId, frameIndex, prompt, previousFrame, referenceImage, isReferenceStyle } = payload;
-        
-        // For reference style, we'll use image-to-image generation
-        const requestBody = isReferenceStyle ? {
-          prompt: prompt,
-          n: 1,
-          size: "512x512",
-          response_format: "b64_json",
-          image: referenceImage.split(',')[1], // Remove data:image/png;base64, prefix
-          mask: null // Optional: could be used to mask specific areas
-        } : {
-          prompt: prompt,
-          n: 1,
-          size: "512x512",
-          response_format: "b64_json"
-        };
+        const {
+          styleId,
+          actionId,
+          frameIndex,
+          prompt,
+          previousFrame,
+          referenceImage,
+          isReferenceStyle
+        } = payload;
 
-        // Make the API call to generate the frame
-        const response = await fetch(
-          isReferenceStyle ? 
-            'https://api.openai.com/v1/images/variations' : 
-            'https://api.openai.com/v1/images/generations', 
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
+        const image = isReferenceStyle ? referenceImage : previousFrame;
+        const response = await fetch('/api/pipeline', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            stage: 'animation-frame',
+            prompt,
+            image,
+            options: {
+              model: payload?.model || defaultModel,
+              backgroundMode: 'transparent',
+              outputFormat: 'png'
             },
-            body: JSON.stringify(requestBody)
-          }
-        );
-
-        if (!response.ok) {
-          throw new Error(`API call failed: ${response.statusText}`);
-        }
+            filename: `frame-${frameIndex + 1}.png`
+          })
+        });
 
         const data = await response.json();
-        
-        // Send the generated image back to the main thread
+        if (!response.ok) {
+          throw new Error(data?.error?.message || `API call failed: ${response.statusText}`);
+        }
+
         self.postMessage({
           type: 'FRAME_COMPLETE',
           payload: {
             frameIndex,
             styleId,
             actionId,
-            imageData: data.data[0].b64_json,
+            imageData: data.base64 || data.dataUrl,
             error: null
           }
         });
@@ -73,4 +67,4 @@ self.onmessage = async function(e) {
       }
       break;
   }
-}; 
+};

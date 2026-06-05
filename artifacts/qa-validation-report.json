@@ -1,0 +1,25 @@
+{
+  "projectName": "Project 6-6-2026",
+  "provider": "mock",
+  "action": "idle",
+  "outputSettings": {
+    "cellSize": 256,
+    "fps": 12,
+    "columns": 5,
+    "rows": 2,
+    "footAnchorX": 128,
+    "footAnchorY": 255,
+    "backgroundMode": "chroma-green"
+  },
+  "stageStatus": {
+    "setup": "complete",
+    "reference": "complete",
+    "directional": "complete",
+    "animation": "complete",
+    "aligner": "not run",
+    "export": "running"
+  },
+  "warnings": [],
+  "frameCount": 10,
+  "updatedAt": "2026-06-05T23:41:21.502Z"
+}

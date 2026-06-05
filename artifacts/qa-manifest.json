@@ -1,0 +1,68 @@
+{
+  "projectName": "Project 6-6-2026",
+  "provider": "mock",
+  "action": "idle",
+  "outputSettings": {
+    "cellSize": 256,
+    "fps": 12,
+    "columns": 5,
+    "rows": 2,
+    "footAnchorX": 128,
+    "footAnchorY": 255,
+    "backgroundMode": "chroma-green"
+  },
+  "frameCount": 10,
+  "frameOffsets": [
+    {
+      "label": "idle 01",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 02",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 03",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 04",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 05",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 06",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 07",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 08",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 09",
+      "offsetX": 0,
+      "offsetY": 0
+    },
+    {
+      "label": "idle 10",
+      "offsetX": 0,
+      "offsetY": 0
+    }
+  ],
+  "generatedAt": "2026-06-05T23:41:21.350Z"
+}

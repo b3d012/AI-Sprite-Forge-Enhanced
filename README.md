@@ -1,144 +1,90 @@
-# SpriteForge
+# AI Sprite Forge Enhanced
 
 <div align="center">
-  <img src="./media/spriteforge.png" alt="SpriteForge Logo" width="300px" />
-  <p><em>Generate professional game sprites from photos using OpenAI's GPT-Image-1 model</em></p>
+  <img src="./media/spriteforge.png" alt="AI Sprite Forge Enhanced logo" width="300" />
+  <p><em>An enhanced fork of SpriteForge for web-based sprite generation and production-ready sprite exports.</em></p>
 </div>
 
-## 🎮 Overview
+## Overview
 
-SpriteForge is a web application that transforms regular photos into game-ready character sprites using OpenAI's GPT-Image-1 model. Whether you're a game developer looking for quick character assets or just someone who wants to see themselves as a video game character, SpriteForge makes it easy to generate high-quality sprites in various popular game styles.
+AI Sprite Forge Enhanced is a fork of SpriteForge that combines a web sprite-generation dashboard with a production game-ready sprite pipeline. It is designed for developers who want to move from quick experimentation to shippable sprite assets without changing tools.
 
-## ✨ Features
+It supports two operating modes:
 
-- **Multiple Game Styles**: Generate sprites in various popular game styles:
-  - Stardew Valley (32×32 pixelart)
-  - Breath of the Wild (256×256 cel-shaded)
-  - Genshin Impact (192×192 anime-styled)
-  - Hollow Knight (128×128 hand-drawn gothic)
-  - Fall Guys (160×160 bouncy cartoon)
-  - Original style based on your reference image
+- Mock mode for running the app without an API key
+- OpenAI mode when `OPENAI_API_KEY` is configured on the server
 
-- **Animation Actions**: Create multiple animation sequences for your character:
-  - Idle animation
-  - Walk cycle
-  - Jump animation
-  - Air attack
-  - Hurt animation
-  - Knockout animation
-  - Punch combinations
-  - Turn around animation
+The project is centered around sprite workflows that produce game-ready outputs, including spritesheets, `manifest.json`, and preview assets.
 
-- **Real-time Preview**: Watch animations come to life with our built-in animation player
-- **Frame Editing**: Edit and regenerate individual frames for perfect animations
-- **Direct API Integration**: Uses your own OpenAI API key for image generation
+## What It Produces
 
-## 🖼️ Example Output
+- `spritesheet.png`
+- `manifest.json`
+- `preview.gif`
+- `validation-report.json`
+- ZIP bundles for distribution and handoff
+
+The browser UI also includes preview images, animation playback, and frame downloads for iterative work.
+
+## Screenshots
+
+The repository already includes screenshots in `media/`.
 
 <div align="center">
-  <img src="./media/placeholder.jpeg" alt="Example Sprite Sheet" width="600px" />
-  <p><em>Example sprite sheet generated with SpriteForge</em></p>
+  <img src="./media/screenshot1.png" alt="SpriteForge dashboard screenshot" width="800" />
+  <p><em>Upload and style selection flow</em></p>
+
+  <img src="./media/screenshot2.png" alt="SpriteForge style screenshot" width="800" />
+  <p><em>Style preview and selection</em></p>
+
+  <img src="./media/screenshot3.png" alt="SpriteForge animation screenshot" width="800" />
+  <p><em>Animation preview and frame editing</em></p>
 </div>
 
-## 📸 Screenshots
+If you clone the repo without the media folder or want fresher captures, replace these with current screenshots before publishing.
 
-<div align="center">
-  <img src="./media/screenshot1.png" alt="SpriteForge - Upload Screen" width="800px" />
-  <p><em>Upload your image and select style preferences</em></p>
-  
-  <img src="./media/screenshot2.png" alt="SpriteForge - Style Selection" width="800px" />
-  <p><em>Choose from multiple generated game styles</em></p>
-  
-  <img src="./media/screenshot3.png" alt="SpriteForge - Animation Preview" width="800px" />
-  <p><em>Preview and customize your animated sprite frames</em></p>
-</div>
+## Quick Start
 
-## 🚀 Getting Started
-
-### Prerequisites
-
-- Node.js (v16+)
-- npm or yarn
-- OpenAI API key with access to GPT-Image-1 model
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/marcelontime/spriteforge.git
-   cd spriteforge
-   ```
-
-2. Install dependencies:
+1. Install dependencies
    ```bash
    npm install
    ```
 
-3. Build the styles:
-   ```bash
-   npm run build
-   ```
-
-4. Start the development server:
+2. Start the local app
    ```bash
    npm run dev
    ```
 
-5. Open your browser to http://localhost:8080
+3. Open the app in your browser
+   - Local development default: `http://localhost:8080`
 
-### Live Demo
+## Modes
 
-Try out SpriteForge directly in your browser: [SpriteForge Demo](https://marcelontime.github.io/spriteforge/?step=1)
+### Mock Mode
 
-## 🎮 How to Use
+Mock mode is the no-key workflow. It is the safest way to explore the dashboard, run the full deterministic pipeline, inspect the style library, and export sample assets without setting up OpenAI access first. Live sprite generation is reserved for OpenAI mode.
 
-1. **Enter your OpenAI API key** (required for image generation)
-2. **Upload a reference photo** (preferably a full-body image with a clear subject)
-3. **Generate Style Previews** to see your character in different game styles
-4. **Select your preferred style** from the generated options
-5. **Choose an animation action** from the dropdown menu
-6. **Generate your sprite frames** and watch them animate in real-time
-7. **Edit individual frames** if needed by clicking on them
-8. **Download your completed sprite sheet** for use in your games!
+### OpenAI Mode
 
-## 🛠️ Technical Details
+Set `OPENAI_API_KEY` in your environment and switch the provider to OpenAI in the UI or set `IMAGE_PROVIDER=openai` on the server when you want real image generation. If no key is present, the UI shows a clear missing-key warning and stays usable in Mock mode.
 
-### Technology Stack
+## Recommended Reading Order
 
-- **Frontend**: HTML5, CSS3, JavaScript, Tailwind CSS
-- **API Integration**: OpenAI GPT-Image-1 model
-- **Build Tools**: PostCSS, Nodemon, Concurrently
-- **Deployment**: GitHub Pages
+1. [docs/DOCS_SUMMARY.md](./docs/DOCS_SUMMARY.md)
+2. [docs/MOCK_MODE.md](./docs/MOCK_MODE.md)
+3. [docs/PIPELINE.md](./docs/PIPELINE.md)
+4. [docs/API.md](./docs/API.md)
+5. [docs/EXPORT_FORMAT.md](./docs/EXPORT_FORMAT.md)
+6. [docs/TESTING.md](./docs/TESTING.md)
+7. [ATTRIBUTION.md](./ATTRIBUTION.md)
 
-### API Usage Notes
+## Project Notes
 
-- This application uses OpenAI's GPT-Image-1 model which requires an API key
-- API calls are made directly from your browser to OpenAI
-- Your API key is stored in localStorage for convenience but never sent to our servers
-- Image generation costs will be charged to your OpenAI account
+- The UI is a browser-first dashboard.
+- The Node server serves the app and health check endpoint.
+- The current `/api/generate-sprite` route is a placeholder for server-side generation work.
+- Generated and derived assets should always preserve transparency unless a downstream export explicitly calls for a background.
 
-## 🔒 Privacy
+## License
 
-- Your uploaded images are processed entirely in your browser
-- No data is transmitted to any server except directly to OpenAI's API
-- Your OpenAI API key is stored locally and only used to authenticate with OpenAI
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgements
-
-- OpenAI for providing the image generation API
-- All the game art styles that inspired this project
-- Contributors who have helped improve this tool 
+The project remains under the MIT License. See `LICENSE` for the original license text and `ATTRIBUTION.md` for fork credits and provenance notes.

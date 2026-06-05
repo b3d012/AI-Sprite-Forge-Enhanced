@@ -585,14 +585,13 @@ function goToStep(stepNumber) {
       // When returning to step 1, restore Next button state
       const state = getState();
       const nextButton = document.getElementById('toStep2');
-      const apiKey = document.getElementById('apiKey')?.value;
       const previewImage = document.getElementById('previewImage');
       const hasImg = previewImage && state.uploadedImageUrl;
       const hasSelectedStyle = !!state.selectedStyle;
       
       if (nextButton) {
         // Enable the button if we have all required inputs
-        nextButton.disabled = !(apiKey && hasImg && hasSelectedStyle);
+        nextButton.disabled = !(hasImg && hasSelectedStyle);
         nextButton.textContent = 'Next →';
       }
       
@@ -825,10 +824,6 @@ async function generateSingleStyle(styleId) {
   }
   
   // Verify we have everything needed
-  if (!state.apiKey) {
-    throw new Error('Please enter your OpenAI API key');
-  }
-  
   if (!state.uploadedImage) {
     throw new Error('Please upload an image first');
   }
@@ -966,7 +961,6 @@ function updateSelectedStylePreview(card) {
 //  Step-1 checks           //
 //////////////////////////////
 function updateStep1Status() {
-  const apiKey = document.getElementById('apiKey')?.value;
   const previewImage = document.getElementById('previewImage');
   const hasImg = previewImage && !previewImage.classList.contains('hidden');
   const state = getState();
@@ -975,7 +969,7 @@ function updateStep1Status() {
   // Update the toStep2 button status
   const nextButton = document.getElementById('toStep2');
   if (nextButton) {
-    nextButton.disabled = !(apiKey && hasImg && hasSelectedStyle);
+    nextButton.disabled = !(hasImg && hasSelectedStyle);
   }
 }
 
@@ -1563,8 +1557,7 @@ async function generateSelectedAction() {
         const result = await window.callOpenAIEdit(
           enhancedPrompt,
           currentInput,
-          state.apiKey,
-          state.selectedModel
+          { model: state.selectedModel, stage: 'animation-frame' }
         ).catch(error => {
           console.error(`API call error for frame ${i+1}:`, error);
           throw new Error(`Failed to generate frame ${i+1}: ${error.message || 'API error'}`);
@@ -2442,8 +2435,7 @@ async function regenerateFrame(actionId, frameIndex) {
     const result = await window.callOpenAIEdit(
       customPrompt,
       inputImage,
-      state.apiKey,
-      state.selectedModel
+      { model: state.selectedModel, stage: 'animation-frame' }
     ).catch(error => {
       console.error(`API call error when regenerating frame ${frameIndex}:`, error);
       throw new Error(`Failed to regenerate frame: ${error.message || 'API error'}`);

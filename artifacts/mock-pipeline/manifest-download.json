@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "styleId": "mock-style",
+  "actionId": "mock-action",
+  "anchor": {
+    "x": 128,
+    "y": 255
+  },
+  "cellSize": 256,
+  "columns": 4,
+  "rows": 2,
+  "sheetWidth": 1024,
+  "sheetHeight": 512,
+  "frameCount": 8,
+  "frames": [
+    {
+      "frameIndex": 0,
+      "column": 0,
+      "row": 0,
+      "x": 0,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 1,
+      "column": 1,
+      "row": 0,
+      "x": 256,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 2,
+      "column": 2,
+      "row": 0,
+      "x": 512,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 3,
+      "column": 3,
+      "row": 0,
+      "x": 768,
+      "y": 0,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 4,
+      "column": 0,
+      "row": 1,
+      "x": 0,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 5,
+      "column": 1,
+      "row": 1,
+      "x": 256,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 6,
+      "column": 2,
+      "row": 1,
+      "x": 512,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    },
+    {
+      "frameIndex": 7,
+      "column": 3,
+      "row": 1,
+      "x": 768,
+      "y": 256,
+      "width": 256,
+      "height": 256
+    }
+  ]
+}

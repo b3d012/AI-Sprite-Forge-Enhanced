@@ -1,494 +1,818 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-900 scroll-smooth">
+<html lang="en" class="h-full">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SpriteForge - Generate Game Sprites with AI</title>
-    <meta name="description" content="Transform photos into game-ready character sprites using OpenAI's GPT-Image-1 model">
-    <!-- Favicon -->
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png">
-    <link rel="manifest" href="./site.webmanifest">
-    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
-    <!-- Open Graph / Social Media Metadata -->
-    <meta property="og:title" content="SpriteForge - Generate Game Sprites with AI">
-    <meta property="og:description" content="Transform photos into game-ready character sprites using OpenAI's GPT-Image-1 model">
-    <meta property="og:image" content="https://marcelontime.github.io/spriteforge/media/spriteforge.png">
-    <meta property="og:url" content="https://marcelontime.github.io/spriteforge">
-    <meta property="og:type" content="website">
-    <meta name="twitter:card" content="summary_large_image">
-    <!-- WhatsApp specific -->
-    <meta property="og:image:width" content="1024">
-    <meta property="og:image:height" content="1024">
-    <meta property="og:image:alt" content="SpriteForge - Generate Game Sprites with AI">
-    <meta property="og:image:type" content="image/png">
-    <meta property="og:site_name" content="SpriteForge">
-    <meta name="thumbnail" content="https://marcelontime.github.io/spriteforge/media/spriteforge.png">
-    <meta itemprop="image" content="https://marcelontime.github.io/spriteforge/media/spriteforge.png">
-    <!-- Stylesheets -->
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-    <link rel="stylesheet" href="styles/output.css">
-    <link rel="stylesheet" href="styles/main.css">
-    <!-- Simple initialization script -->
-    <script>
-      // Initialize with clean step handling
-      document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded - initializing wizard');
-      });
-    </script>
+    <title>SpriteForge Dashboard</title>
+    <meta name="description" content="Production dashboard for building sprite sheets, anchors, and export-ready animations." />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles/output.css" />
+    <link rel="stylesheet" href="styles/main.css" />
     <style>
-      body {
-        background: linear-gradient(to bottom, #111827, #0f172a);
-      }
-      
-      .step-circle {
-        width: 32px;
-        height: 32px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background-color: #1e293b;
-        color: #9ca3af;
-        transition: all 0.3s ease;
-      }
-      
-      .step-circle.active {
-        background-color: var(--primary-color);
-        color: #111827;
-      }
-      
-      .step-circle.completed {
-        background-color: rgba(var(--primary-rgb), 0.2);
-        color: var(--primary-color);
-      }
-      
-      .step-line {
-        flex-grow: 1;
-        height: 2px;
-        background-color: #1e293b;
-        margin: 0 8px;
-      }
-      
-      .step-line.active {
-        background-color: var(--primary-color);
-      }
-      
-      .style-card {
-        border: 2px solid rgba(255, 166, 41, 0.3);
-        transition: all 0.2s ease;
-        background-color: #1e293b;
-        overflow: hidden;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        height: 100%;
-      }
-      
-      .style-card:hover {
-        border-color: rgba(255, 166, 41, 0.8);
-        transform: translateY(-4px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      }
-      
-      .style-card.selected, .style-option.selected {
-        border-color: #FFA629;
-        box-shadow: 0 0 0 2px #FFA629;
-      }
-      
-      /* Simple Step Panel Visibility Control */
-      .step-panel {
-        display: none;
-      }
-      
-      .step-panel.is-active {
-        display: block;
-      }
-      
-      /* Custom animations */
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      
-      .fade-in {
-        animation: fadeIn 0.3s ease-out forwards;
-      }
-      
-      /* Image preview styles */
-      #imagePreview {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin: 1rem 0;
-      }
-      
-      #imagePreview.hidden {
-        display: none;
-      }
-      
-      #previewImage {
-        max-width: 100%;
-        max-height: 200px;
-        border-radius: 0.5rem;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        object-fit: contain;
-        cursor: pointer;
-        transition: transform 0.2s ease;
-      }
-      
-      #previewImage:hover {
-        transform: scale(1.05);
-      }
-      
       :root {
-        --primary-color: #FFA629;
-        --primary-rgb: 255, 166, 41;
-        --secondary-color: #8E44FD;
-        --secondary-rgb: 142, 68, 253;
+        --bg: #08111f;
+        --panel: rgba(9, 17, 33, 0.82);
+        --panel-strong: rgba(14, 23, 43, 0.95);
+        --line: rgba(148, 163, 184, 0.18);
+        --text: #eef2ff;
+        --muted: #94a3b8;
+        --accent: #7dd3fc;
+        --accent-2: #f59e0b;
+        --danger: #fb7185;
+        --warning: #fbbf24;
+        --success: #34d399;
       }
-      
-      /* Button Styles */
-      .btn-primary {
-        background-color: var(--primary-color);
-        color: #111827;
-        font-weight: 500;
-        border-radius: 0.375rem;
-        transition: all 0.2s;
+
+      html, body {
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(125, 211, 252, 0.14), transparent 30%),
+          radial-gradient(circle at top right, rgba(245, 158, 11, 0.10), transparent 24%),
+          linear-gradient(180deg, #07111f 0%, #071523 48%, #050a13 100%);
+        color: var(--text);
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 92%);
+      }
+
+      .dashboard-shell {
+        position: relative;
+        z-index: 1;
+        max-width: 1600px;
+        margin: 0 auto;
+        padding: 24px 18px 40px;
+      }
+
+      .hero {
+        border: 1px solid var(--line);
+        background: linear-gradient(135deg, rgba(9, 17, 33, 0.92), rgba(15, 23, 42, 0.75));
+        backdrop-filter: blur(18px);
+        border-radius: 28px;
+        padding: 22px;
+        box-shadow: 0 30px 90px rgba(2, 8, 23, 0.32);
+      }
+
+      .eyebrow {
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      .title {
+        font-family: "Space Grotesk", "Inter", sans-serif;
+        font-size: clamp(2rem, 4vw, 4rem);
+        line-height: 0.98;
+        margin-top: 8px;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        max-width: 72ch;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-radius: 999px;
+        padding: 0.45rem 0.8rem;
+        border: 1px solid var(--line);
+        background: rgba(15, 23, 42, 0.78);
+        color: #dbeafe;
+        font-size: 0.85rem;
+      }
+
+      .badge[data-status="connected"] { color: var(--success); border-color: rgba(52, 211, 153, 0.35); }
+      .badge[data-status="missing"] { color: var(--warning); border-color: rgba(251, 191, 36, 0.35); }
+      .badge[data-status="warning"] { color: var(--warning); }
+      .badge[data-status="failed"] { color: var(--danger); }
+      .badge[data-status="complete"] { color: var(--success); }
+      .badge[data-status="running"] { color: #67e8f9; }
+      .badge[data-status="not run"] { color: var(--muted); }
+
+      .grid-layout {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: minmax(0, 1.55fr) minmax(360px, 0.95fr);
+        margin-top: 18px;
+        align-items: start;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .card {
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 70px rgba(2, 6, 23, 0.24);
+        overflow: hidden;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 18px 20px 0;
+      }
+
+      .card-title {
+        font-family: "Space Grotesk", "Inter", sans-serif;
+        font-size: 1.1rem;
+        font-weight: 700;
+      }
+
+      .card-body {
+        padding: 18px 20px 20px;
+      }
+
+      .muted { color: var(--muted); }
+
+      .field-grid {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .label {
+        font-size: 0.82rem;
+        color: #cbd5e1;
+        font-weight: 600;
+      }
+
+      .input, .select, .textarea {
+        width: 100%;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.94);
+        color: var(--text);
+        padding: 0.72rem 0.82rem;
+        outline: none;
+      }
+
+      .input:focus, .select:focus, .textarea:focus {
+        border-color: rgba(125, 211, 252, 0.6);
+        box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.12);
+      }
+
+      .select option {
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .button {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 0.55rem;
+        border-radius: 14px;
+        border: 1px solid transparent;
+        padding: 0.78rem 1rem;
+        font-weight: 700;
+        transition: transform 140ms ease, opacity 140ms ease, border-color 140ms ease, background 140ms ease;
       }
-      
-      .btn-primary:hover {
-        background-color: #e69423;
-        transform: translateY(-1px);
-      }
-      
-      .btn-primary:disabled {
-        background-color: #6b7280;
+
+      .button:hover:not(:disabled) { transform: translateY(-1px); }
+      .button:disabled {
+        opacity: 0.38;
         cursor: not-allowed;
         transform: none;
       }
-      
-      .btn-secondary {
-        background-color: rgba(var(--secondary-rgb), 0.15);
-        color: var(--secondary-color);
-        font-weight: 500;
-        border-radius: 0.375rem;
-        transition: all 0.2s;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+
+      .button-primary {
+        background: linear-gradient(135deg, #7dd3fc, #38bdf8);
+        color: #04111f;
       }
-      
-      .btn-secondary:hover {
-        background-color: rgba(var(--secondary-rgb), 0.25);
+
+      .button-secondary {
+        background: rgba(15, 23, 42, 0.88);
+        color: #dbeafe;
+        border-color: rgba(148, 163, 184, 0.16);
       }
-      
-      .form-input {
-        width: 100%;
-        padding: 0.5rem 0.75rem;
-        background-color: #1e293b;
-        border: 1px solid #374151;
-        border-radius: 0.375rem;
-        color: #e5e7eb;
-        font-size: 0.875rem;
-        transition: border-color 0.2s;
+
+      .button-tertiary {
+        background: rgba(245, 158, 11, 0.12);
+        color: #fde68a;
+        border-color: rgba(245, 158, 11, 0.22);
       }
-      
-      .form-input:focus {
-        outline: none;
-        border-color: var(--primary-color);
-        box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.25);
+
+      .button-danger {
+        background: rgba(251, 113, 133, 0.12);
+        color: #fecdd3;
+        border-color: rgba(251, 113, 133, 0.22);
       }
-      
-      .form-label {
-        display: block;
-        font-size: 0.875rem;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-        color: #9ca3af;
-      }
-      
-      /* Style Grid */
-      .style-grid {
+
+      .section-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 1.5rem;
-        margin-top: 2rem;
-        min-height: 200px;
+        gap: 16px;
       }
-      
-      /* Selection Summary Styles */
-      .selection-summary {
-        background: linear-gradient(to right, rgba(15, 23, 42, 0.8), rgba(30, 41, 59, 0.8));
-        border-radius: 0.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        transition: all 0.3s ease;
+
+      .section-status {
+        white-space: nowrap;
       }
-      
-      .selection-summary-item {
-        position: relative;
-        transition: transform 0.2s ease;
+
+      .status-line {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 12px;
       }
-      
-      .selection-summary-item:hover {
-        transform: translateY(-2px);
-      }
-      
-      .selection-summary-image {
-        width: 100px;
-        height: 100px;
-        border-radius: 0.375rem;
-        overflow: hidden;
-        background-color: rgba(17, 24, 39, 0.7);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        transition: all 0.3s ease;
-        border: 2px solid transparent;
-      }
-      
-      .selection-summary-image img {
-        object-fit: contain;
+
+      .progress-track {
         width: 100%;
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.88);
+        overflow: hidden;
+        border: 1px solid var(--line);
+      }
+
+      .progress-fill {
         height: 100%;
+        width: 0%;
+        min-width: 28px;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #22c55e, #38bdf8 55%, #f59e0b 100%);
+        color: #02111f;
+        font-size: 0.75rem;
+        font-weight: 800;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 10px;
+        transition: width 220ms ease;
       }
-      
-      .selection-summary-image.uploaded {
-        border-color: rgba(var(--primary-rgb), 0.5);
+
+      .preview-grid {
+        display: grid;
+        gap: 12px;
       }
-      
-      .selection-summary-image.selected {
-        border-color: rgba(var(--secondary-rgb), 0.5);
+
+      .preview-panel {
+        border-radius: 20px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(2, 6, 23, 0.42);
+        padding: 12px;
+      }
+
+      .preview-panel h4 {
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #e2e8f0;
+      }
+
+      .preview-image {
+        width: 100%;
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.16);
+        background: rgba(15, 23, 42, 0.88);
+        object-fit: contain;
+      }
+
+      .preview-split {
+        display: grid;
+        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .frame-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+        gap: 10px;
+      }
+
+      .frame-thumb {
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: rgba(15, 23, 42, 0.86);
+        padding: 8px;
+        cursor: pointer;
+        transition: transform 140ms ease, border-color 140ms ease;
+      }
+
+      .frame-thumb:hover { transform: translateY(-1px); border-color: rgba(125, 211, 252, 0.42); }
+      .frame-thumb.is-selected { border-color: rgba(125, 211, 252, 0.9); box-shadow: 0 0 0 2px rgba(125, 211, 252, 0.14); }
+
+      .frame-thumb img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 10px;
+        margin-bottom: 6px;
+      }
+
+      .frame-thumb small { color: var(--muted); }
+
+      .warning-list, .activity-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .notice {
+        border-radius: 16px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        padding: 12px 14px;
+        background: rgba(15, 23, 42, 0.72);
+      }
+
+      .notice.warning { border-color: rgba(251, 191, 36, 0.26); background: rgba(120, 53, 15, 0.18); }
+      .notice.error { border-color: rgba(248, 113, 113, 0.28); background: rgba(127, 29, 29, 0.18); }
+      .notice.success { border-color: rgba(52, 211, 153, 0.28); background: rgba(6, 78, 59, 0.16); }
+      .notice.info { border-color: rgba(125, 211, 252, 0.24); background: rgba(8, 47, 73, 0.18); }
+
+      .notice-title {
+        font-weight: 700;
+        margin-bottom: 4px;
+      }
+
+      .footer {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 0.9rem;
+        text-align: center;
+      }
+
+      .hidden-file-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+
+      @media (max-width: 1180px) {
+        .grid-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .dashboard-shell { padding: 14px 12px 24px; }
+        .hero, .card { border-radius: 20px; }
+        .card-header, .card-body { padding-left: 14px; padding-right: 14px; }
+        .preview-split { grid-template-columns: 1fr; }
       }
     </style>
   </head>
-  <body class="h-full text-gray-100 antialiased">
-    <!-- Simple helper functions -->
-    <script>
-      // Show image in modal
-      window.showImageModal = function(src) {
-        const modal = document.getElementById('imageModal');
-        const modalImage = document.getElementById('modalImage');
-        if (modal && modalImage) {
-          modalImage.src = src;
-          modal.classList.remove('hidden');
-        }
-      };
-      
-      // Load API key on page load
-      window.addEventListener('load', function() {
-        const apiKey = document.getElementById('apiKey');
-        if (apiKey && localStorage.getItem('openai_api_key')) {
-          apiKey.value = localStorage.getItem('openai_api_key');
-          console.log('API key loaded from localStorage');
-        }
-      });
-    </script>
-    
-    <div class="container mx-auto px-4 py-8 max-w-5xl">
-      <!-- Main header -->
-      <header class="text-center mb-12 pt-8">
-        <h1 class="text-4xl sm:text-6xl font-extrabold mb-6 text-white">
-          Turn any picture into<br />
-          <span class="text-primary">game-ready sprites</span>
-        </h1>
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <!-- Buttons removed -->
+  <body class="h-full">
+    <main class="dashboard-shell">
+      <section class="hero">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="eyebrow">SpriteForge Production Dashboard</span>
+          <span id="apiKeyStatus" class="badge" data-status="missing">Loading...</span>
+          <span id="projectStatusBadge" class="badge" data-status="not run">Project idle</span>
         </div>
-      </header>
-      
-      <!-- Step indicator - progression tracker -->
-      <div class="flex items-center justify-center mb-12 max-w-sm mx-auto" id="stepper">
-        <div class="step flex items-center" data-step="1">
-          <div class="step-circle active flex items-center justify-center w-8 h-8 rounded-full bg-primary text-gray-900 text-sm font-medium">1</div>
-          <div class="ml-2 mr-auto text-sm font-medium text-primary">Upload</div>
+        <div class="title">A complete sprite production workspace.</div>
+        <p class="subtitle">
+          Manage project setup, anchors, animation passes, manual alignment, exports, and QC from one polished surface.
+          Mock mode keeps the dashboard usable without an OpenAI key.
+        </p>
+        <div class="status-line">
+          <div class="flex items-center gap-3">
+            <span class="muted text-sm">Pipeline progress</span>
+            <div class="progress-track min-w-[280px] sm:min-w-[420px]">
+              <div id="pipelineProgressBar" class="progress-fill">0%</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="badge" id="currentStageBadge" data-status="not run">Current stage: setup</span>
+            <span class="badge" id="providerBadge" data-status="not run">Mock provider</span>
+          </div>
         </div>
-        
-        <div class="h-0.5 w-20 bg-gray-800 mx-3 step-line"></div>
-        
-        <div class="step flex items-center" data-step="2">
-          <div class="step-circle flex items-center justify-center w-8 h-8 rounded-full bg-gray-800 text-gray-400 text-sm font-medium">2</div>
-          <div class="ml-2 text-sm font-medium text-gray-400">Actions</div>
+      </section>
+
+      <section class="grid-layout">
+        <div class="stack">
+          <section class="card" id="projectSetupCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Project Setup</div>
+                <p class="muted text-sm">Create, load, save, reset, and configure output settings.</p>
+              </div>
+              <span class="badge section-status" id="setupStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="button-row">
+                <button id="newProjectBtn" class="button button-primary" type="button">New Project</button>
+                <button id="loadProjectBtn" class="button button-secondary" type="button">Load Project</button>
+                <button id="saveProjectBtn" class="button button-secondary" type="button">Save Project</button>
+                <button id="resetProjectBtn" class="button button-danger" type="button">Reset Project</button>
+              </div>
+
+              <div class="field-grid">
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="projectNameInput">Project name</label>
+                  <input id="projectNameInput" class="input" type="text" value="Untitled Project" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="providerSelect">Provider</label>
+                  <select id="providerSelect" class="select">
+                    <option value="mock">Mock</option>
+                    <option value="openai">OpenAI</option>
+                  </select>
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="apiKey">OpenAI API key</label>
+                  <input id="apiKey" class="input" type="password" placeholder="sk-..." autocomplete="off" />
+                </div>
+
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="cellSizeInput">Cell size</label>
+                  <input id="cellSizeInput" class="input" type="number" min="32" max="1024" step="1" value="128" />
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="fpsInput">FPS</label>
+                  <input id="fpsInput" class="input" type="number" min="1" max="60" step="1" value="12" />
+                </div>
+                <div class="field col-span-12 md:col-span-3">
+                  <label class="label" for="columnsInput">Columns</label>
+                  <input id="columnsInput" class="input" type="number" min="1" max="64" step="1" value="8" />
+                </div>
+                <div class="field col-span-12 md:col-span-3">
+                  <label class="label" for="rowsInput">Rows</label>
+                  <input id="rowsInput" class="input" type="number" min="1" max="64" step="1" value="4" />
+                </div>
+                <div class="field col-span-12 md:col-span-3">
+                  <label class="label" for="footAnchorXInput">Foot anchor X</label>
+                  <input id="footAnchorXInput" class="input" type="number" min="0" max="1024" step="1" value="64" />
+                </div>
+                <div class="field col-span-12 md:col-span-3">
+                  <label class="label" for="footAnchorYInput">Foot anchor Y</label>
+                  <input id="footAnchorYInput" class="input" type="number" min="0" max="1024" step="1" value="112" />
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="backgroundModeSelect">Background mode</label>
+                  <select id="backgroundModeSelect" class="select">
+                    <option value="chroma-green">Chroma Green</option>
+                    <option value="transparent">Transparent Final Export</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="referenceCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Reference and Anchor</div>
+                <p class="muted text-sm">Upload the source image and produce a clean south anchor pass.</p>
+              </div>
+              <span class="badge section-status" id="referenceStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="button-row">
+                <button id="uploadReferenceBtn" class="button button-primary" type="button">Upload Reference Image</button>
+                <button id="generateSouthAnchorBtn" class="button button-secondary" type="button">Generate South Anchor</button>
+                <button id="pixelSnapAnchorBtn" class="button button-secondary" type="button">Pixel Snap Anchor</button>
+                <button id="validateAnchorBtn" class="button button-secondary" type="button">Validate Anchor</button>
+                <button id="downloadAnchorBtn" class="button button-secondary" type="button">Download Anchor</button>
+                <button id="compareRawSnappedBtn" class="button button-tertiary" type="button">Compare Raw vs Snapped</button>
+              </div>
+              <input id="referenceImageInput" class="hidden-file-input" type="file" accept="image/*" />
+              <div class="preview-split">
+                <div class="preview-panel">
+                  <h4>Raw Reference</h4>
+                  <img id="referencePreview" class="preview-image" alt="Reference preview" />
+                </div>
+                <div class="preview-panel">
+                  <h4>Snapped Anchor</h4>
+                  <img id="anchorPreview" class="preview-image" alt="Anchor preview" />
+                </div>
+              </div>
+              <div class="preview-panel">
+                <h4>Compare Raw vs Snapped</h4>
+                <div class="preview-split">
+                  <img id="compareRawPreview" class="preview-image" alt="Raw comparison preview" />
+                  <img id="compareSnappedPreview" class="preview-image" alt="Snapped comparison preview" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="directionalCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Directional Anchors</div>
+                <p class="muted text-sm">Produce and validate NSEW anchor directions for animation consistency.</p>
+              </div>
+              <span class="badge section-status" id="directionalStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="button-row">
+                <button id="generateDirectionsBtn" class="button button-primary" type="button">Generate NSEW Anchors</button>
+                <button id="snapDirectionsBtn" class="button button-secondary" type="button">Pixel Snap Directions</button>
+                <button id="validateDirectionsBtn" class="button button-secondary" type="button">Validate Directions</button>
+                <button id="previewDirectionGridBtn" class="button button-tertiary" type="button">Preview Direction Grid</button>
+              </div>
+              <div class="preview-panel">
+                <h4>Direction Grid Preview</h4>
+                <img id="directionGridPreview" class="preview-image" alt="Directional grid preview" />
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="animationCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Animation Builder</div>
+                <p class="muted text-sm">Choose an action, generate a pose board, recover frames, and validate the sheet.</p>
+              </div>
+              <span class="badge section-status" id="animationStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="field-grid">
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="actionSelect">Action selector</label>
+                  <select id="actionSelect" class="select">
+                    <option value="idle">idle</option>
+                    <option value="walk">walk</option>
+                    <option value="attack">attack</option>
+                    <option value="hurt">hurt</option>
+                    <option value="jump">jump</option>
+                    <option value="death">death</option>
+                    <option value="cast">cast</option>
+                    <option value="dash">dash</option>
+                  </select>
+                </div>
+              </div>
+              <div class="button-row">
+                <button id="generatePoseBoardBtn" class="button button-primary" type="button">Generate Pose Board</button>
+                <button id="recoverFramesBtn" class="button button-secondary" type="button">Recover Frames</button>
+                <button id="pixelSnapFramesBtn" class="button button-secondary" type="button">Pixel Snap Frames</button>
+                <button id="cleanBackgroundBtn" class="button button-secondary" type="button">Clean Background</button>
+                <button id="normalizeRuntimeSheetBtn" class="button button-secondary" type="button">Normalize Runtime Sheet</button>
+                <button id="validateAnimationBtn" class="button button-secondary" type="button">Validate Animation</button>
+                <button id="previewAnimationBtn" class="button button-tertiary" type="button">Preview Animation</button>
+              </div>
+              <div class="preview-panel">
+                <h4>Animation Preview</h4>
+                <img id="animationPreview" class="preview-image" alt="Animation preview" />
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="promptBuilderCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Prompt Builder</div>
+                <p class="muted text-sm">Stage-aware prompt templates for production sprite planning and provider handoff.</p>
+              </div>
+              <span class="badge section-status" id="promptBuilderStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="field-grid">
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="stagePromptSelect">Stage prompt</label>
+                  <select id="stagePromptSelect" class="select"></select>
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="promptProviderSelect">Provider</label>
+                  <select id="promptProviderSelect" class="select"></select>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label">Action presets</label>
+                  <div id="actionPresetChips" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="promptActionName">Action name</label>
+                  <input id="promptActionName" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="promptDirection">Direction</label>
+                  <select id="promptDirection" class="select">
+                    <option value="south">south</option>
+                    <option value="north">north</option>
+                    <option value="east">east</option>
+                    <option value="west">west</option>
+                  </select>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label" for="promptCoreIdentity">Core identity</label>
+                  <textarea id="promptCoreIdentity" class="input min-h-[84px] resize-y"></textarea>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label" for="promptCostumePalette">Costume and palette</label>
+                  <textarea id="promptCostumePalette" class="input min-h-[84px] resize-y"></textarea>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label" for="promptSilhouetteNotes">Silhouette notes</label>
+                  <textarea id="promptSilhouetteNotes" class="input min-h-[84px] resize-y"></textarea>
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptCellSize">Cell size</label>
+                  <input id="promptCellSize" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptBackgroundColor">Background color</label>
+                  <input id="promptBackgroundColor" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptPaletteLimit">Palette limit</label>
+                  <input id="promptPaletteLimit" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptFootAnchor">Foot anchor</label>
+                  <input id="promptFootAnchor" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptSheetColumns">Sheet columns</label>
+                  <input id="promptSheetColumns" class="input" type="text" />
+                </div>
+                <div class="field col-span-12 md:col-span-4">
+                  <label class="label" for="promptSheetRows">Sheet rows</label>
+                  <input id="promptSheetRows" class="input" type="text" />
+                </div>
+                <div class="field col-span-12">
+                  <label class="label" for="finalPromptOutput">Final prompt</label>
+                  <textarea id="finalPromptOutput" class="input min-h-[280px] resize-y font-mono text-xs leading-5"></textarea>
+                </div>
+              </div>
+              <div class="button-row">
+                <button id="copyPromptBtn" class="button button-secondary" type="button">Copy final prompt</button>
+                <button id="sendPromptBtn" class="button button-primary" type="button">Send prompt to selected provider</button>
+                <button id="resetPromptBtn" class="button button-secondary" type="button">Reset prompt to defaults</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="alignerCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Manual Frame Aligner</div>
+                <p class="muted text-sm">Inspect frame thumbnails and nudge offsets by 1 px or 5 px.</p>
+              </div>
+              <span class="badge section-status" id="alignerStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="frame-strip" id="frameThumbStrip"></div>
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="badge" id="selectedFrameBadge" data-status="not run">No frame selected</span>
+                <span class="muted text-sm" id="selectedFrameOffset">Offset: 0, 0</span>
+              </div>
+              <div class="button-row">
+                <button id="nudgeLeft1Btn" class="button button-secondary" type="button">Left 1</button>
+                <button id="nudgeRight1Btn" class="button button-secondary" type="button">Right 1</button>
+                <button id="nudgeUp1Btn" class="button button-secondary" type="button">Up 1</button>
+                <button id="nudgeDown1Btn" class="button button-secondary" type="button">Down 1</button>
+                <button id="nudgeLeft5Btn" class="button button-secondary" type="button">Left 5</button>
+                <button id="nudgeRight5Btn" class="button button-secondary" type="button">Right 5</button>
+                <button id="nudgeUp5Btn" class="button button-secondary" type="button">Up 5</button>
+                <button id="nudgeDown5Btn" class="button button-secondary" type="button">Down 5</button>
+                <button id="resetFrameBtn" class="button button-danger" type="button">Reset Selected Frame</button>
+                <button id="applyOffsetToAllBtn" class="button button-tertiary" type="button">Apply Current Offset to All Frames</button>
+              </div>
+              <div class="preview-panel">
+                <h4>Live Preview</h4>
+                <img id="livePreview" class="preview-image" alt="Live preview" />
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="exportCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Export Center</div>
+                <p class="muted text-sm">Package the current build as images, manifest, GIF, ZIP, and QC report.</p>
+              </div>
+              <span class="badge section-status" id="exportStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body section-grid">
+              <div class="button-row">
+                <button id="exportSpritesheetBtn" class="button button-primary" type="button">Export Spritesheet PNG</button>
+                <button id="exportManifestBtn" class="button button-secondary" type="button">Export Manifest JSON</button>
+                <button id="exportGifBtn" class="button button-secondary" type="button">Export Preview GIF</button>
+                <button id="exportZipBtn" class="button button-secondary" type="button">Export Full ZIP</button>
+                <button id="exportReportBtn" class="button button-tertiary" type="button">Export Validation Report</button>
+              </div>
+              <div class="preview-panel">
+                <h4>Sheet Preview</h4>
+                <img id="sheetPreview" class="preview-image" alt="Spritesheet preview" />
+              </div>
+            </div>
+          </section>
+
+          <section class="card" id="oneClickCard">
+            <div class="card-header">
+              <div>
+                <div class="card-title">One-Click Buttons</div>
+                <p class="muted text-sm">Run the full pipeline, a single stage, QC, or a mock demo pass.</p>
+              </div>
+              <span class="badge section-status" id="oneClickStageStatus" data-status="not run">not run</span>
+            </div>
+            <div class="card-body">
+              <div class="button-row">
+                <button id="runFullPipelineBtn" class="button button-primary" type="button">Run Full Production Pipeline</button>
+                <button id="runCurrentStageBtn" class="button button-secondary" type="button">Run Current Stage Only</button>
+                <button id="runQcValidationBtn" class="button button-secondary" type="button">Run QC Validation</button>
+                <button id="runMockDemoBtn" class="button button-tertiary" type="button">Mock Demo Run</button>
+              </div>
+            </div>
+          </section>
         </div>
+
+        <aside class="stack">
+          <section class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Workspace Preview</div>
+                <p class="muted text-sm">A compact view of the current reference and generated outputs.</p>
+              </div>
+            </div>
+            <div class="card-body preview-grid">
+              <div class="preview-panel">
+                <h4>Reference</h4>
+                <img id="sidebarReferencePreview" class="preview-image" alt="Sidebar reference preview" />
+              </div>
+              <div class="preview-panel">
+                <h4>Anchor</h4>
+                <img id="sidebarAnchorPreview" class="preview-image" alt="Sidebar anchor preview" />
+              </div>
+              <div class="preview-panel">
+                <h4>Animation</h4>
+                <img id="sidebarAnimationPreview" class="preview-image" alt="Sidebar animation preview" />
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Validation Warnings</div>
+                <p class="muted text-sm">Issues are surfaced here as the pipeline runs.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="validationWarningsList" class="warning-list"></div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Activity Feed</div>
+                <p class="muted text-sm">Latest pipeline steps, saves, imports, and exports.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="activityFeed" class="activity-list"></div>
+            </div>
+          </section>
+        </aside>
+      </section>
+
+      <div class="footer">
+        Built for production sprite workflows. Mock mode is safe to use without an OpenAI API key.
       </div>
-      
-      <!-- Main content -->
-      <main class="relative">
-        <!-- STEP 1 – Upload -->
-        <section data-step="1" class="step-panel is-active" id="upload">
-          <!-- Top action navigation -->
-          <div class="flex items-center justify-between mb-8">
-            <!-- Buttons removed -->
-          </div>
-          
-          <!-- Upload and Preview Section -->
-          <div class="flex flex-col md:flex-row gap-6 mb-6">
-            <!-- Left side - Upload area -->
-            <div class="w-full md:w-1/2 border-2 border-dashed border-gray-700 rounded-lg p-4 flex flex-col items-center justify-center min-h-[200px]">
-              <div class="text-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-16 h-16 mb-4 text-gray-600 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                </svg>
-                <p class="text-gray-400 mb-4">Drag & drop an image,</p>
-                <button id="chooseFileBtn" type="button" class="btn-secondary px-6 py-2">Choose file</button>
-                <input type="file" id="imageUpload" class="hidden" accept="image/*" capture="false" />
-              </div>
-              
-              <div id="imagePreview" class="mt-4 w-full flex items-center justify-center hidden">
-                <img id="previewImage" class="max-h-48 max-w-full rounded shadow cursor-zoom-in object-contain" alt="Preview" onclick="showImageModal(this.src)" />
-              </div>
-            </div>
-            
-            <!-- Right side - Selected style preview -->
-            <div class="w-full md:w-1/2 bg-gray-800/30 border border-gray-700 rounded-lg p-4 flex flex-col items-center justify-center">
-              <div id="selectedStyleContainer" class="text-center">
-                <img id="selectedStyleImage" class="max-h-48 mx-auto mb-4" alt="Selected style" src="media/style_previews/hollow_knight.png" />
-                <h3 id="selectedStyleName" class="text-lg font-semibold mb-1">Hollow Knight</h3>
-                <p class="text-gray-400 text-sm">128×128 hand-drawn gothic style</p>
-              </div>
-            </div>
-          </div>
-          
-          <!-- API Key (moved below the upload) -->
-          <div class="mb-8">
-            <form id="apiKeyForm" onsubmit="event.preventDefault();" autocomplete="off">
-              <input type="text" id="apiUsername" name="username" style="display: none;" autocomplete="username" value="openai" />
-              <label for="apiKey" class="form-label">OpenAI API Key</label>
-              <input type="password" id="apiKey" name="apiKey" class="form-input" placeholder="sk-..." autocomplete="new-password" data-lpignore="true" />
-            </form>
-          </div>
-          
-          <!-- Style Grid -->
-          <div class="mb-8">
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4" id="stylesGrid">
-              <!-- Style options will be added dynamically -->
-            </div>
-          </div>
-          
-          <!-- Navigation -->
-          <div class="flex justify-end">
-            <button id="toStep2" class="btn-primary px-8 py-3" disabled>Next →</button>
-          </div>
-        </section>
-        
-        <!-- STEP 2 – Style - Skip this in the new interface -->
-        <section data-step="2" class="step-panel" id="style">
-          <!-- Top action navigation -->
-          <div class="flex items-center justify-between mb-8">
-            <button type="button" class="btn-secondary px-6 py-3 rounded-md" data-back="1">← Back to Upload</button>
-          </div>
-          
-          <!-- Selected Style Preview and Image -->
-          <div class="flex flex-col md:flex-row gap-6 mb-6">
-            <!-- Left side - Styled Image Preview -->
-            <div class="w-full md:w-1/2 bg-gray-800/30 border border-gray-700 rounded-lg p-4 flex flex-col items-center justify-center min-h-[200px]">
-              <h3 class="text-lg font-semibold mb-4">Generated Style</h3>
-              <div id="styledImageContainer" class="w-full flex items-center justify-center">
-                <img id="styledImagePreview" class="max-h-48 max-w-full rounded shadow cursor-zoom-in object-contain" alt="Styled Preview" onclick="showImageModal(this.src)" />
-              </div>
-            </div>
-            
-            <!-- Right side - Action Selection -->
-            <div class="w-full md:w-1/2 bg-gray-800/30 border border-gray-700 rounded-lg p-4 flex flex-col">
-              <h3 class="text-lg font-semibold mb-4">Choose Action</h3>
-              
-              <!-- Action selection dropdown -->
-              <div class="mb-4">
-                <label for="actionSelect" class="form-label">Animation Type</label>
-                <select id="actionSelect" class="form-input">
-                  <option value="" disabled selected>Select action...</option>
-                  <!-- Options will be populated from ACTION_PROMPTS -->
-                </select>
-              </div>
-              
-              <!-- Action description will be shown here -->
-              <div id="actionDescription" class="text-sm text-gray-400 mb-4">
-                Select an action to see its description and frame count.
-              </div>
-              
-              <!-- Generate button -->
-              <button id="generateActionBtn" class="btn-primary w-full py-3 mt-auto" disabled>
-                Generate Action
-              </button>
-            </div>
-          </div>
-          
-          <!-- Animation Preview Section - Simplified -->
-          <div class="bg-gray-800/30 border border-gray-700 rounded-lg p-6 mb-8">
-            <h3 class="text-xl font-semibold mb-4">Action Preview</h3>
-            
-            <!-- Preview Area -->
-            <div id="actionPreview" class="flex justify-center items-center min-h-[200px] bg-gray-900/50 rounded-lg mb-4 hidden">
-              <!-- Preview content will be inserted here -->
-            </div>
-            
-            <!-- Generated Frames Grid -->
-            <div id="actionFramesContainer" class="mt-4">
-              <!-- Frame grid will be inserted here -->
-            </div>
-          </div>
-        </section>
-      </main>
-      
-      <!-- Footer -->
-      <footer class="text-center text-sm text-gray-500 mt-16 pb-8">
-        Built with ❤️ &nbsp;·&nbsp; <a href="https://github.com/marcelontime/spriteforge" class="underline hover:text-gray-300">GitHub</a>
-      </footer>
-    </div>
-    
-    <!-- Modal for image preview -->
-    <div id="imageModal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center hidden">
-      <div class="relative bg-transparent max-w-3xl p-4">
-        <img id="modalImage" class="max-w-full max-h-[80vh]" alt="Preview" />
-        <button id="closeModal" class="absolute top-2 right-2 w-8 h-8 flex items-center justify-center rounded-full bg-gray-800/50 text-white hover:bg-gray-700">×</button>
-      </div>
-    </div>
-    
-    <!-- Scripts -->
+    </main>
+
+    <input id="projectFileInput" class="hidden-file-input" type="file" accept="application/json" />
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script type="module" src="js/state.js"></script>
-    <script type="module" src="js/api.js"></script>
-    <script type="module" src="js/ui.js"></script>
-    <script type="module" src="js/wizard.js"></script>
-    <script>
-      // Basic event handlers for modal and API key
-      document.addEventListener('DOMContentLoaded', function() {
-        // Set up modal close functionality
-        const modal = document.getElementById('imageModal');
-        const closeBtn = document.getElementById('closeModal');
-        
-        if (closeBtn && modal) {
-          closeBtn.addEventListener('click', function() {
-            modal.classList.add('hidden');
-          });
-          
-          modal.addEventListener('click', function(e) {
-            if (e.target === modal) {
-              modal.classList.add('hidden');
-            }
-          });
-        }
-        
-        // Set up API key save functionality
-        const apiKey = document.getElementById('apiKey');
-        if (apiKey) {
-          apiKey.addEventListener('input', function() {
-            localStorage.setItem('openai_api_key', this.value);
-          });
-        }
-        
-        // Set up file choose button
-        const chooseFileBtn = document.getElementById('chooseFileBtn');
-        const imageUpload = document.getElementById('imageUpload');
-        
-        if (chooseFileBtn && imageUpload) {
-          chooseFileBtn.addEventListener('click', function() {
-            imageUpload.click();
-          });
-        }
-      });
-    </script>
+    <script type="module" src="js/dashboard.js"></script>
+    <script type="module" src="js/runtime/runtimeWorkbench.js"></script>
   </body>
-</html> 
+</html>

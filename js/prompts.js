@@ -6,6 +6,26 @@
 // 1.  Data Models   //
 ///////////////////////
 
+import {
+  buildPrompt,
+  buildPipelinePrompt,
+  DEFAULT_PROMPT_VALUES,
+  getActionPresetOptions,
+  getPromptTemplateOptions,
+  PROMPT_TEMPLATES,
+  ACTION_PRESET_MAP
+} from './prompts/buildPrompt.js';
+
+export {
+  buildPrompt,
+  buildPipelinePrompt,
+  DEFAULT_PROMPT_VALUES,
+  getActionPresetOptions,
+  getPromptTemplateOptions,
+  PROMPT_TEMPLATES,
+  ACTION_PRESET_MAP
+};
+
 // Common constants and helpers
 const NEGATIVE_ITEMS = [
   'text',
@@ -14,13 +34,16 @@ const NEGATIVE_ITEMS = [
   'UI',
   'grids',
   'props',
-  'backgrounds',
-  'non-transparent background',
+  'extra characters',
+  'transparent background',
+  'alpha channel transparency',
+  'soft shadows',
+  'gradient backgrounds',
   'white background',
   'solid background'
 ].join(', ');
 
-export const SPRITE_SYSTEM_PRIMER = `Generate sprite with FULLY TRANSPARENT BACKGROUND (alpha channel transparency). No solid backgrounds or backdrops of any kind. Maintain character consistency and smooth motion.`;
+export const SPRITE_SYSTEM_PRIMER = `Generate a production sprite with a flat opaque chroma green background (#00FF00) and no transparent background during generation. Keep the character lower fidelity than the input image, fully readable at sprite scale, and consistent across frames.`;
 
 // Helper functions
 const imageSize = (base) => `${base}×${base}`;
@@ -400,6 +423,18 @@ export const ACTION_PROMPTS = {
     ]
   },
 
+  attack: {
+    name: 'Attack Animation',
+    frames: 4,
+    basePrompt: 'Character committing to a readable attack pose with clear impact intent and grounded balance.',
+    framePrompts: [
+      'Wind-up pose, body loading into the strike',
+      'Strike extension, attack line fully readable',
+      'Peak impact, maximum silhouette clarity',
+      'Recovery pose, returning to stance'
+    ]
+  },
+
   jump: {
     name: 'Jump Animation',
     frames: 4,
@@ -412,6 +447,28 @@ export const ACTION_PROMPTS = {
     ]
   },
 
+  dash: {
+    name: 'Dash Animation',
+    frames: 2,
+    basePrompt: 'Character performing a quick burst of forward movement with a crisp silhouette and strong momentum.',
+    framePrompts: [
+      'Compression into the dash, body leaning forward',
+      'Explosive burst forward, motion clearly readable'
+    ]
+  },
+
+  cast: {
+    name: 'Cast Animation',
+    frames: 4,
+    basePrompt: 'Character channeling a spell or ability with deliberate hand placement and readable magical anticipation.',
+    framePrompts: [
+      'Focus pose, energy gathering at the core',
+      'Arms lifting into the casting channel',
+      'Spell release moment, energy visibly directed',
+      'Recovery pose, magic dissipating'
+    ]
+  },
+
   air_attack: {
     name: 'Air Attack',
     frames: 2,
@@ -419,6 +476,20 @@ export const ACTION_PROMPTS = {
     framePrompts: [
       'Wind-up pose in air, preparing strike',
       'Full extension of aerial attack, maximum reach'
+    ]
+  },
+
+  death: {
+    name: 'Death Animation',
+    frames: 6,
+    basePrompt: 'Character collapsing into a clear defeat sequence with a final resting pose.',
+    framePrompts: [
+      'Impact reaction, balance beginning to fail',
+      'Body tipping out of the stance',
+      'Falling through the middle of the collapse',
+      'Near-ground horizontal transition',
+      'Landing and settling on the ground',
+      'Final resting pose, fully resolved'
     ]
   },
 
@@ -474,6 +545,28 @@ export const ACTION_PROMPTS = {
   }
 };
 
+const ACTION_STAGE_MAP = {
+  idle: 'south_front_anchor',
+  walk: 'walk_cycle_instructions',
+  attack: 'action_pose_board',
+  hurt: 'frame_recovery_instructions',
+  jump: 'directional_anchors_nsew',
+  death: 'runtime_normalize_and_align',
+  cast: 'per_frame_chroma_layout_snap',
+  dash: 'pixel_snap_anchor',
+  air_attack: 'action_pose_board',
+  knock_out: 'frame_recovery_instructions',
+  punches: 'action_pose_board',
+  turn_around: 'directional_anchors_nsew'
+};
+
+function getPromptBuilderOverrides() {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  return window.spritePromptBuilderState || {};
+}
+
 /////////////////////////////////////
 // 5.  Prompt Generation Functions //
 /////////////////////////////////////
@@ -494,18 +587,41 @@ export function generateSpritePrompt(styleId, actionId, referenceToken = 'REF_CH
     throw new Error(`Invalid frame index ${frameIndex} for action ${actionId}`);
   }
 
-  // Build a motion description that explains the sequence relationship
-  let motionDescription = '';
+  const builderState = getPromptBuilderOverrides();
+  const stageId = ACTION_STAGE_MAP[actionId] || builderState.stageId || DEFAULT_PROMPT_VALUES.stageId;
+  const styleBlock = style.buildBlock ? style.buildBlock().trim() : style.name;
+  const actionFrameText = action.framePrompts?.[frameIndex] || action.basePrompt || action.name;
+  let motionDescription = action.frames > 1
+    ? (frameIndex === 0
+      ? `This is the FIRST frame of a ${action.frames}-frame animation sequence.`
+      : frameIndex === action.frames - 1
+        ? `This is the FINAL frame (${frameIndex + 1}/${action.frames}) of the animation sequence.`
+        : `This is frame ${frameIndex + 1} in a ${action.frames}-frame animation sequence.`)
+    : '';
+
+  const promptCore = buildPrompt({
+    stageId,
+    coreIdentity: builderState.coreIdentity || referenceToken,
+    costumeAndPalette: builderState.costumeAndPalette || styleBlock,
+    silhouetteNotes: builderState.silhouetteNotes || `${action.basePrompt} ${actionFrameText}`.trim(),
+    styleTarget: builderState.styleTarget || style.name,
+    actionName: builderState.actionName || action.name,
+    direction: builderState.direction || 'south',
+    cellSize: builderState.cellSize || DEFAULT_PROMPT_VALUES.cellSize,
+    backgroundColor: builderState.backgroundColor || DEFAULT_PROMPT_VALUES.backgroundColor,
+    paletteLimit: builderState.paletteLimit || DEFAULT_PROMPT_VALUES.paletteLimit,
+    outputSheetRows: builderState.outputSheetRows || DEFAULT_PROMPT_VALUES.outputSheetRows,
+    outputSheetColumns: builderState.outputSheetColumns || DEFAULT_PROMPT_VALUES.outputSheetColumns,
+    footAnchorX: builderState.footAnchorX || DEFAULT_PROMPT_VALUES.footAnchorX,
+    footAnchorY: builderState.footAnchorY || DEFAULT_PROMPT_VALUES.footAnchorY
+  });
+
+  const continuityBlock = isContinuation
+    ? `Continuity: DIRECTLY CONTINUE from the previous frame. Frame ${frameIndex + 1} must preserve exact character design, palette, outline thickness, and pose logic while remaining lower fidelity than the input image.`
+    : '';
+
+  const seedLine = seed !== undefined ? `Seed: ${seed}` : '';
   if (action.frames > 1) {
-    if (frameIndex === 0) {
-      motionDescription = `This is the FIRST frame of a ${action.frames}-frame animation sequence.`;
-    } else if (frameIndex === action.frames - 1) {
-      motionDescription = `This is the FINAL frame (${frameIndex + 1}/${action.frames}) of the animation sequence.`;
-    } else {
-      motionDescription = `This is frame ${frameIndex + 1} in a ${action.frames}-frame animation sequence.`;
-    }
-    
-    // Add information about the previous and next frames if available
     if (frameIndex > 0) {
       motionDescription += ` Previous frame showed: ${action.framePrompts[frameIndex - 1]}`;
     }
@@ -514,42 +630,11 @@ export function generateSpritePrompt(styleId, actionId, referenceToken = 'REF_CH
     }
   }
 
-  // For original style, we'll focus on maintaining the reference exactly
-  if (style.isReferenceOnly) {
-    const prompt = [
-      `Generate sprite matching reference exactly with transparent background.`,
-      `Character: ${referenceToken}`,
-      `Frame: ${frameIndex + 1}/${action.frames}`,
-      `Action: ${action.name}`,
-      `Base Description: ${action.basePrompt}`,
-      `Frame Description: ${action.framePrompts[frameIndex]}`,
-      motionDescription,
-      isContinuation ? `Continuity: This is a sequential frame, maintain exact consistency with the previous frame. Use identical colors, art style, and proportions.` : '',
-      `Maintain original art style, colors, and character design. Do not change the art style.`,
-      seed !== undefined ? `Seed: ${seed}` : '',
-      `Avoid: style changes, backgrounds, reinterpretation of character design`,
-      `IMPORTANT: Output image MUST have transparent background with NO solid color backdrop.`
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    return prompt;
-  }
-
-  // For other styles, use the normal style block
-  const styleBlock = style.buildBlock();
-  const seedLine = seed !== undefined ? `Seed: ${seed}` : '';
-
-  // Build continuity instructions for sequential frames
-  let continuityBlock = '';
-  if (isContinuation) {
-    continuityBlock = `Continuity: DIRECTLY CONTINUE from previous frame. This frame (${frameIndex + 1}) continues the motion from frame ${frameIndex}. Maintain exact character design consistency including colors, shading style, and outline thickness. Use identical color palette to previous frame. Ensure smooth motion progression with proper inbetweening technique. Keep transparent background. Do not change the art style between frames.`;
-  }
-
   const fullPrompt = [
     SPRITE_SYSTEM_PRIMER,
     `Character: ${referenceToken}`,
-    styleBlock,
+    `Style profile: ${styleBlock}`,
+    promptCore,
     `Frame: ${frameIndex + 1}/${action.frames}`,
     `Action: ${action.name}`,
     `Base Description: ${action.basePrompt}`,
@@ -557,8 +642,9 @@ export function generateSpritePrompt(styleId, actionId, referenceToken = 'REF_CH
     motionDescription,
     continuityBlock,
     seedLine,
+    style.isReferenceOnly ? `Reference mode: preserve the source character structure while keeping the production green-screen workflow.` : '',
     `Avoid: ${NEGATIVE_ITEMS}`,
-    `IMPORTANT: Output image MUST have transparent background with NO solid color backdrop.`,
+    `IMPORTANT: Output image MUST have a flat opaque chroma green background (#00FF00) with no transparent background during generation.`,
     isContinuation ? `This frame is part of a sequential animation and MUST flow naturally from the previous frame.` : ''
   ]
     .filter(Boolean)
@@ -594,17 +680,22 @@ export function makeStylePreview(styleId) {
   }
   
   const styleBlock = style.buildBlock().trim();
-  console.log('Style block for preview:', {
-    styleId,
-    styleBlock
+  const fullPrompt = buildPrompt({
+    stageId: 'south_front_anchor',
+    coreIdentity: style.name,
+    costumeAndPalette: styleBlock,
+    silhouetteNotes: 'Create the style preview using a neutral full-body front view.',
+    styleTarget: style.name,
+    actionName: 'idle',
+    direction: 'south',
+    cellSize: DEFAULT_PROMPT_VALUES.cellSize,
+    backgroundColor: DEFAULT_PROMPT_VALUES.backgroundColor,
+    paletteLimit: DEFAULT_PROMPT_VALUES.paletteLimit,
+    outputSheetRows: DEFAULT_PROMPT_VALUES.outputSheetRows,
+    outputSheetColumns: DEFAULT_PROMPT_VALUES.outputSheetColumns,
+    footAnchorX: DEFAULT_PROMPT_VALUES.footAnchorX,
+    footAnchorY: DEFAULT_PROMPT_VALUES.footAnchorY
   });
-
-  const fullPrompt = [
-    SPRITE_SYSTEM_PRIMER,
-    styleBlock,
-    `Pose: Idle - Neutral standing pose, front view`,
-    `Avoid: ${NEGATIVE_ITEMS}`
-  ].join('\n');
 
   console.log('Final preview prompt:', {
     styleId,

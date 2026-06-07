@@ -10,8 +10,13 @@ async function blobFromInput(input) {
     return response.blob();
   }
 
-  if (typeof input === 'object' && input.dataUrl) {
-    const response = await fetch(input.dataUrl);
+  if (typeof input === 'string' && /^https?:\/\//i.test(input)) {
+    const response = await fetch(input);
+    return response.blob();
+  }
+
+  if (typeof input === 'object' && (input.dataUrl || input.data_url || input.url)) {
+    const response = await fetch(input.dataUrl || input.data_url || input.url);
     return response.blob();
   }
 
@@ -28,6 +33,98 @@ async function readJsonError(response) {
 
 function toDataUrlFromB64(b64, mimeType = 'image/png') {
   return `data:${mimeType};base64,${b64}`;
+}
+
+async function blobToDataUrl(blob, mimeType = 'image/png') {
+  if (!blob) return null;
+
+  const resolvedMimeType = mimeType || blob.type || 'image/png';
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let base64 = '';
+
+  if (typeof Buffer !== 'undefined') {
+    base64 = Buffer.from(bytes).toString('base64');
+  } else {
+    let binary = '';
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    base64 = btoa(binary);
+  }
+
+  return toDataUrlFromB64(base64, resolvedMimeType);
+}
+
+async function fetchUrlAsDataUrl(url, mimeType = 'image/png') {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Unable to fetch OpenAI image payload from ${url}`);
+  }
+
+  const contentType = response.headers.get('content-type') || mimeType || 'image/png';
+  const blob = await response.blob();
+  return blobToDataUrl(blob, contentType);
+}
+
+async function resolveImageDataUrl(node, depth = 0) {
+  if (!node || depth > 5) return null;
+
+  if (typeof node === 'string') {
+    if (node.startsWith('data:')) return node;
+    if (/^https?:\/\//i.test(node)) return fetchUrlAsDataUrl(node);
+    return null;
+  }
+
+  if (node.dataUrl) return node.dataUrl;
+  if (node.data_url) return node.data_url;
+  if (node.b64_json) return toDataUrlFromB64(node.b64_json, node.mime_type || node.mimeType || 'image/png');
+  if (node.base64) return toDataUrlFromB64(node.base64, node.mime_type || node.mimeType || 'image/png');
+  if (node.image_base64) return toDataUrlFromB64(node.image_base64, node.mime_type || node.mimeType || 'image/png');
+  if (node.url) return fetchUrlAsDataUrl(node.url, node.mime_type || node.mimeType || 'image/png');
+  if (node.image_url?.url) return fetchUrlAsDataUrl(node.image_url.url, node.image_url?.mime_type || node.mime_type || node.mimeType || 'image/png');
+  if (Array.isArray(node.content)) {
+    for (const item of node.content) {
+      const resolved = await resolveImageDataUrl(item, depth + 1);
+      if (resolved) return resolved;
+    }
+  }
+  if (Array.isArray(node.data)) {
+    for (const item of node.data) {
+      const resolved = await resolveImageDataUrl(item, depth + 1);
+      if (resolved) return resolved;
+    }
+  }
+  if (Array.isArray(node.output)) {
+    for (const item of node.output) {
+      const resolved = await resolveImageDataUrl(item, depth + 1);
+      if (resolved) return resolved;
+    }
+  }
+  if (Array.isArray(node.images)) {
+    for (const item of node.images) {
+      const resolved = await resolveImageDataUrl(item, depth + 1);
+      if (resolved) return resolved;
+    }
+  }
+
+  return null;
+}
+
+async function normalizeImageResponse(result, stageId, prompt, providerMode) {
+  const dataUrl = await resolveImageDataUrl(result);
+  if (!dataUrl) {
+    throw new Error('OpenAI response did not include an image payload.');
+  }
+
+  const mimeType = dataUrl.match(/^data:([^;]+);base64,/)?.[1] || 'image/png';
+  return {
+    provider: providerMode || 'openai',
+    stageId,
+    mimeType,
+    dataUrl,
+    raw: result,
+    prompt,
+  };
 }
 
 export class OpenAIImageProvider {
@@ -63,7 +160,6 @@ export class OpenAIImageProvider {
     size = '1024x1024',
     quality = 'low',
     background = 'opaque',
-    outputFormat = 'png',
     stageId = 'openai-generate',
     model = this.model,
   } = {}) {
@@ -85,9 +181,7 @@ export class OpenAIImageProvider {
         size,
         quality,
         background,
-        response_format: 'b64_json',
         n: 1,
-        output_format: outputFormat,
       }),
     });
 
@@ -98,18 +192,7 @@ export class OpenAIImageProvider {
     }
 
     const result = await response.json();
-    const b64 = result?.data?.[0]?.b64_json;
-    if (!b64) {
-      throw new Error('OpenAI response did not include an image payload.');
-    }
-
-    return {
-      provider: this.mode,
-      stageId,
-      mimeType: 'image/png',
-      dataUrl: toDataUrlFromB64(b64, 'image/png'),
-      raw: result,
-    };
+    return normalizeImageResponse(result, stageId, prompt, this.mode);
   }
 
   async editImage({
@@ -155,30 +238,7 @@ export class OpenAIImageProvider {
     }
 
     const result = await response.json();
-    const b64 = result?.data?.[0]?.b64_json;
-    const url = result?.data?.[0]?.url;
-
-    if (b64) {
-      return {
-        provider: this.mode,
-        stageId,
-        mimeType: 'image/png',
-        dataUrl: `data:image/png;base64,${b64}`,
-        raw: result,
-      };
-    }
-
-    if (url) {
-      return {
-        provider: this.mode,
-        stageId,
-        mimeType: 'image/png',
-        dataUrl: url,
-        raw: result,
-      };
-    }
-
-    throw new Error('OpenAI response did not include an image payload.');
+    return normalizeImageResponse(result, stageId, prompt, this.mode);
   }
 
   async renderImage(options = {}) {

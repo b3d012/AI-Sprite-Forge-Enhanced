@@ -9,9 +9,7 @@ import { loadPipelineState, savePipelineState } from './pipeline/storage.js';
 
 let state = normalizePipelineState(loadPipelineState() || createPipelineState());
 
-const STORAGE_KEYS = {
-  API_KEY: 'openai_api_key',
-};
+let cachedApiKey = '';
 
 function mergeDeep(target, source) {
   if (!source) return target;
@@ -53,8 +51,8 @@ export function updateUIState() {
   const apiKeyInput =
     document.getElementById('apiKey') || document.getElementById('api-key') || document.getElementById('apiKeyInput');
 
-  if (apiKeyInput && state.apiKey) {
-    apiKeyInput.value = state.apiKey;
+  if (apiKeyInput && cachedApiKey) {
+    apiKeyInput.value = cachedApiKey;
   }
 
   const providerLabel = document.getElementById('provider-label');
@@ -87,6 +85,7 @@ export function resetStyleChoice() {
 }
 
 export function setApiKey(apiKey = '') {
+  cachedApiKey = apiKey;
   state = normalizePipelineState(
     mergeDeep(state, {
       apiKey,
@@ -96,22 +95,12 @@ export function setApiKey(apiKey = '') {
     })
   );
 
-  try {
-    localStorage.setItem(STORAGE_KEYS.API_KEY, apiKey);
-  } catch {
-    // Local storage may be unavailable in some environments.
-  }
-
   persist();
 }
 
 export const storage = {
   getApiKey: () => {
-    try {
-      return state.apiKey || localStorage.getItem(STORAGE_KEYS.API_KEY) || '';
-    } catch {
-      return state.apiKey || '';
-    }
+    return cachedApiKey || state.apiKey || '';
   },
   setApiKey: (key) => setApiKey((key || '').trim()),
   loadPipelineState,
@@ -121,13 +110,11 @@ export const storage = {
 if (typeof document !== 'undefined') {
   document.addEventListener('DOMContentLoaded', () => {
     try {
-      const savedApiKey = localStorage.getItem(STORAGE_KEYS.API_KEY);
-      if (savedApiKey) {
-        setApiKey(savedApiKey);
-      }
+      localStorage.removeItem('openai_api_key');
     } catch {
       // Ignore inaccessible storage in restricted environments.
     }
+    cachedApiKey = '';
     updateUIState();
   });
 }

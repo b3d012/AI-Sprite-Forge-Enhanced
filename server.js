@@ -19,6 +19,16 @@ const port = process.env.PORT || 8080;
 const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 const openaiApiKey = process.env.OPENAI_API_KEY || '';
 const maxUploadBytes = Number.parseInt(process.env.MAX_UPLOAD_BYTES || `${10 * 1024 * 1024}`, 10);
+const GENERATION_STAGE_IDS = new Set([
+  'anchor',
+  'directions',
+  'pose-board',
+  'south_front_anchor',
+  'south_front_anchor_generation',
+  'directional_anchors_nsew',
+  'action_pose_board',
+  'action_pose_board_generation',
+]);
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
@@ -26,24 +36,28 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.use(express.static(__dirname));
 
 function createProvider(mode = 'auto') {
+  const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+
   if (mode === 'openai' && openaiApiKey) {
     return new OpenAIImageProvider({
       apiKey: openaiApiKey,
       endpoint: process.env.OPENAI_IMAGE_EDIT_ENDPOINT || 'https://api.openai.com/v1/images/edits',
+      model,
     });
   }
 
   if (mode === 'openai' && !openaiApiKey) {
-    return new OpenAIImageProvider({
-      apiKey: '',
-      endpoint: process.env.OPENAI_IMAGE_EDIT_ENDPOINT || 'https://api.openai.com/v1/images/edits',
-    });
+    const error = new Error('OPENAI_API_KEY is not configured on the server. Set it to use OpenAI mode.');
+    error.code = 'missing_openai_api_key';
+    error.status = 503;
+    throw error;
   }
 
   if (mode === 'auto' && openaiApiKey) {
     return new OpenAIImageProvider({
       apiKey: openaiApiKey,
       endpoint: process.env.OPENAI_IMAGE_EDIT_ENDPOINT || 'https://api.openai.com/v1/images/edits',
+      model,
     });
   }
 
@@ -77,7 +91,7 @@ async function runOrchestratorEndpoint(res, body, stageId) {
     return res.json(result);
   } catch (error) {
     console.error(`Stage ${stageId} failed:`, error);
-    return sendApiError(res, error, 500);
+    return sendApiError(res, error, error.status || (error.code === 'missing_openai_api_key' ? 503 : 500));
   }
 }
 
@@ -107,7 +121,7 @@ async function runProviderEndpoint(res, body = {}, stageId = 'client-edit') {
       }
     }
 
-    const isGeneration = ['anchor', 'directions', 'pose-board'].includes(stageId);
+    const isGeneration = GENERATION_STAGE_IDS.has(stageId);
     const result = isGeneration
       ? await provider.generateImage({ prompt, size, quality, background, stageId, seed, width: 1024, height: 1024, label })
       : await provider.editImage({ prompt, image: imageDataUrl, size, quality, background, stageId, seed, label });
@@ -115,7 +129,7 @@ async function runProviderEndpoint(res, body = {}, stageId = 'client-edit') {
     return res.json({ ok: true, ...result });
   } catch (error) {
     console.error(`Provider stage ${stageId} failed:`, error);
-    return sendApiError(res, error, 500);
+    return sendApiError(res, error, error.status || (error.code === 'missing_openai_api_key' ? 503 : 500));
   }
 }
 
@@ -123,6 +137,7 @@ app.get('/health', (_req, res) => {
   res.json({
     status: 'ok',
     provider: openaiApiKey ? 'openai-or-mock' : 'mock',
+    openaiConfigured: !!openaiApiKey,
   });
 });
 
@@ -174,9 +189,7 @@ app.post('/api/pipeline/stages/:stageId/run', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Stage run failed:', error);
-    res.status(500).json({
-      error: error.message || 'Stage run failed',
-    });
+    return sendApiError(res, error, error.status || 500);
   }
 });
 
@@ -195,9 +208,7 @@ app.post('/api/pipeline/run', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Pipeline run failed:', error);
-    res.status(500).json({
-      error: error.message || 'Pipeline run failed',
-    });
+    return sendApiError(res, error, error.status || 500);
   }
 });
 
@@ -208,13 +219,11 @@ app.post('/api/generate-sprite', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Legacy sprite generation failed:', error);
-    res.status(500).json({
-      error: error.message || 'Sprite generation failed',
-    });
+    return sendApiError(res, error, error.status || 500);
   }
 });
 
 app.listen(port, host, () => {
   console.log(`Server running at http://${host}:${port}`);
-  console.log(`Provider mode: ${openaiApiKey ? 'openai (with mock fallback)' : 'mock only'}`);
+  console.log(`Provider mode: ${openaiApiKey ? 'openai available' : 'mock only'}`);
 });

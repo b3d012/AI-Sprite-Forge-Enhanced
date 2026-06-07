@@ -90,7 +90,7 @@ function showImageModal(imageUrl) {
 
 // Initialize state with fixed model
 updateState({
-  selectedModel: 'gpt-image-1'
+  selectedModel: 'gpt-image-1.5'
 });
 
 // Initialize cost calculator
@@ -124,14 +124,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const imageUpload = document.getElementById('imageUpload');
   const generateStylesBtn = document.getElementById('toStep2');
   const generateActionBtn = document.getElementById('generateActionBtn');
-  
-  // Load API key from localStorage if available
-  const savedApiKey = localStorage.getItem('apiKey');
-  if (savedApiKey && apiKeyInput) {
-    apiKeyInput.value = savedApiKey;
-    updateState({ apiKey: savedApiKey });
+
+  try {
+    localStorage.removeItem('apiKey');
+  } catch {
+    // Ignore inaccessible storage in restricted environments.
   }
-  
+
   // Initialize UI state
   updateUIState();
   
@@ -142,8 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (apiKeyInput) {
     apiKeyInput.addEventListener('change', (e) => {
       updateState({ apiKey: e.target.value });
-      // Save to localStorage
-      localStorage.setItem('apiKey', e.target.value);
     });
   }
 

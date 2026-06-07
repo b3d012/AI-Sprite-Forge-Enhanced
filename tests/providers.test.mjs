@@ -49,6 +49,77 @@ test('mock provider runs the full pipeline without an API key', async () => {
   assert.ok(result.state.recoveredFrames.length > 0);
 });
 
+test('OpenAI provider normalizes nested generation payloads', async () => {
+  const provider = new OpenAIImageProvider({
+    apiKey: 'test-key',
+    fetchImpl: async (url, options = {}) => {
+      if (String(url).includes('/images/generations')) {
+        assert.equal(options.method, 'POST');
+        return {
+          ok: true,
+          json: async () => ({
+            output: [
+              {
+                content: [
+                  {
+                    b64_json: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEklEQVR42mP8z/C/HwAIAwMCAH+1G0cAAAAASUVORK5CYII=',
+                  },
+                ],
+              },
+            ],
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const result = await provider.generateImage({
+    prompt: 'Create a tiny test sprite.',
+    size: '256x256',
+    quality: 'low',
+    background: 'opaque',
+  });
+
+  assert.match(result.dataUrl, /^data:image\/png;base64,/);
+  assert.equal(result.stageId, 'openai-generate');
+});
+
+test('OpenAI provider normalizes nested edit payloads', async () => {
+  const provider = new OpenAIImageProvider({
+    apiKey: 'test-key',
+    fetchImpl: async (url, options = {}) => {
+      if (String(url).includes('/images/edits')) {
+        assert.equal(options.method, 'POST');
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              {
+                url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEklEQVR42mP8z/C/HwAIAwMCAH+1G0cAAAAASUVORK5CYII=',
+              },
+            ],
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    },
+  });
+
+  const result = await provider.editImage({
+    prompt: 'Edit this sprite.',
+    image: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEklEQVR42mP8z/C/HwAIAwMCAH+1G0cAAAAASUVORK5CYII=',
+    size: '256x256',
+    quality: 'low',
+    background: 'transparent',
+  });
+
+  assert.match(result.dataUrl, /^data:image\/png;base64,/);
+  assert.equal(result.stageId, 'openai-edit');
+});
+
 const maybeTest = process.env.OPENAI_API_KEY ? test : test.skip;
 
 maybeTest('real OpenAI provider only runs when OPENAI_API_KEY exists', async () => {

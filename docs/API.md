@@ -1,30 +1,30 @@
 # API
 
-This repository currently uses a browser-first API flow with an optional Node server wrapper.
+This repository uses a browser dashboard plus a local Node server for OpenAI-backed generation.
 
 ## OpenAI Mode
 
-The browser-side generation path calls the OpenAI Images API directly from `js/api.js`.
+The browser now calls the local server, and the server owns the OpenAI credentials through `OPENAI_API_KEY`.
 
 ### Current Request Shape
 
-- Endpoint: `https://api.openai.com/v1/images/edits`
-- Model: `gpt-image-1`
-- Request body uses `FormData`
-- The uploaded image is sent as the reference asset
+- Endpoint: `/api/pipeline/providers/edit`
+- The server switches to OpenAI when `providerMode=openai`
+- Prompt-only stages use generation requests
+- Edit stages send the source image as a data URL or uploaded blob
 - The prompt is built from the style and action library
 
 ### Runtime Validation
 
 The code validates that:
 
-- an API key exists before generation
-- the uploaded image is a `File` or `Blob`
-- the API response contains base64 image data
+- the server is reachable
+- the selected stage has the required prompt or image input
+- the API response contains an image payload in one of the supported shapes
 
 ### Local Storage
 
-The UI stores the user-supplied key in `localStorage` under `openai_api_key` so the dashboard can restore it on refresh.
+The dashboard no longer depends on a saved client-side API key for OpenAI calls. Mock mode remains fully local.
 
 ## Environment Variables
 
@@ -32,19 +32,19 @@ The UI stores the user-supplied key in `localStorage` under `openai_api_key` so 
 
 Important note:
 
-- the Node server currently serves static files and a health check
-- the `/api/generate-sprite` route is still a placeholder
-- if you want server-side generation later, `OPENAI_API_KEY` is the environment variable the server already knows about
+- the Node server is the only place that should know the OpenAI secret
+- `OPENAI_IMAGE_MODEL` can override the default image model
+- `OPENAI_IMAGE_EDIT_ENDPOINT` can override the edit endpoint
 
 ## Worker Path
 
-The worker-based path in `js/workers/spriteWorker.js` uses OpenAI image generation endpoints for frame creation.
+The worker-based path in `js/workers/spriteWorker.js` still uses the server pipeline route for frame creation.
 
-That path is useful to understand because it shows the intended production animation flow:
+That path is useful because it shows the intended production animation flow:
 
-- initialize a worker with a key
-- generate a frame from a prompt
-- return a base64 payload
+- initialize a worker with a stage request
+- generate or edit an image through the server
+- return a base64-compatible payload to the caller
 - retry failed frames when needed
 
 ## What Not To Put In The API Layer
@@ -56,7 +56,7 @@ That path is useful to understand because it shows the intended production anima
 
 ## Common Failure Modes
 
-- missing API key
+- missing API key on the server
 - unsupported or expired model access
 - invalid image format
 - unexpected response payload shape

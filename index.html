@@ -455,13 +455,13 @@
                   </select>
                 </div>
                 <div class="field col-span-12 md:col-span-4">
-                  <label class="label" for="apiKey">OpenAI API key</label>
-                  <input id="apiKey" class="input" type="password" placeholder="sk-..." autocomplete="off" />
+                  <label class="label" for="apiKey">OpenAI API key (server env only)</label>
+                  <input id="apiKey" class="input" type="password" placeholder="Configured via OPENAI_API_KEY on the server" autocomplete="off" readonly />
                 </div>
 
                 <div class="field col-span-12 md:col-span-6">
                   <label class="label" for="cellSizeInput">Cell size</label>
-                  <input id="cellSizeInput" class="input" type="number" min="32" max="1024" step="1" value="128" />
+                  <input id="cellSizeInput" class="input" type="number" min="32" max="1024" step="1" value="256" />
                 </div>
                 <div class="field col-span-12 md:col-span-6">
                   <label class="label" for="fpsInput">FPS</label>
@@ -469,19 +469,19 @@
                 </div>
                 <div class="field col-span-12 md:col-span-3">
                   <label class="label" for="columnsInput">Columns</label>
-                  <input id="columnsInput" class="input" type="number" min="1" max="64" step="1" value="8" />
+                  <input id="columnsInput" class="input" type="number" min="1" max="64" step="1" value="5" />
                 </div>
                 <div class="field col-span-12 md:col-span-3">
                   <label class="label" for="rowsInput">Rows</label>
-                  <input id="rowsInput" class="input" type="number" min="1" max="64" step="1" value="4" />
+                  <input id="rowsInput" class="input" type="number" min="1" max="64" step="1" value="2" />
                 </div>
                 <div class="field col-span-12 md:col-span-3">
                   <label class="label" for="footAnchorXInput">Foot anchor X</label>
-                  <input id="footAnchorXInput" class="input" type="number" min="0" max="1024" step="1" value="64" />
+                  <input id="footAnchorXInput" class="input" type="number" min="0" max="1024" step="1" value="128" />
                 </div>
                 <div class="field col-span-12 md:col-span-3">
                   <label class="label" for="footAnchorYInput">Foot anchor Y</label>
-                  <input id="footAnchorYInput" class="input" type="number" min="0" max="1024" step="1" value="112" />
+                  <input id="footAnchorYInput" class="input" type="number" min="0" max="1024" step="1" value="255" />
                 </div>
                 <div class="field col-span-12 md:col-span-6">
                   <label class="label" for="backgroundModeSelect">Background mode</label>

@@ -23,7 +23,15 @@ export function loadPipelineState() {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    return normalizePipelineState(parsed);
+    const sanitized = normalizePipelineState(parsed);
+    if (sanitized.apiKey || sanitized.provider?.apiKey) {
+      delete sanitized.apiKey;
+      if (sanitized.provider) {
+        delete sanitized.provider.apiKey;
+      }
+      storage.setItem(PIPELINE_STORAGE_KEY, JSON.stringify(sanitized));
+    }
+    return sanitized;
   } catch (error) {
     console.warn('Unable to load pipeline state from localStorage:', error);
     return null;
@@ -36,6 +44,10 @@ export function savePipelineState(state) {
 
   try {
     const snapshot = clonePipelineState(state);
+    delete snapshot.apiKey;
+    if (snapshot.provider) {
+      delete snapshot.provider.apiKey;
+    }
     snapshot.inputs = {
       ...(snapshot.inputs || {}),
       referenceImage: null,

@@ -16,6 +16,7 @@
     "test:ui": "vitest run --config vitest.config.mjs --environment jsdom --reporter=dot tests/ui",
     "validate": "node scripts/validate.mjs",
     "check:real-api": "node scripts/check-real-api.mjs",
+    "check:openai-smoke": "node scripts/check-real-api.mjs",
     "check": "npm run build && npm run test:mock && npm run test:ui && node scripts/check-real-api.mjs",
     "postinstall": "npm run build",
     "predeploy": "npm run build",

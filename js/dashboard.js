@@ -1,4 +1,4 @@
-import { getState, updateState, storage } from './state.js';
+import { getState, updateState } from './state.js';
 import {
   buildPrompt,
   getActionPresetOptions,
@@ -7,6 +7,8 @@ import {
   DEFAULT_PROMPT_VALUES,
   ACTION_PRESET_MAP
 } from './prompts/buildPrompt.js';
+import { remoteEdit, remoteGenerate } from './api.js';
+import { MockImageProvider } from './pipeline/providers/mockProvider.js';
 
 const STORAGE_KEY = 'spriteforge_dashboard_runtime_v1';
 const TINY_TRANSPARENT_GIF = 'data:image/gif;base64,R0lGODlhAQABAIABAP///wAAACwAAAAAAQABAAACAkQBADs='; // minimal valid GIF
@@ -98,6 +100,7 @@ let runtime = loadRuntime();
 let els = {};
 let animationTimer = null;
 let animationCycleIndex = 0;
+let openAIStatus = 'unknown';
 
 promptBuilderState = {
   ...PROMPT_FIELD_DEFAULTS,
@@ -121,6 +124,13 @@ function loadRuntime() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return structuredClone(DEFAULT_RUNTIME);
     const parsed = JSON.parse(raw);
+    if (parsed.apiKey || parsed.provider?.apiKey) {
+      delete parsed.apiKey;
+      if (parsed.provider) {
+        delete parsed.provider.apiKey;
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    }
     return mergeRuntime(DEFAULT_RUNTIME, parsed);
   } catch (error) {
     console.warn('Failed to load runtime state:', error);
@@ -259,6 +269,23 @@ function renderPromptBuilder() {
   return prompt;
 }
 
+function buildProductionPrompt(stageId, overrides = {}) {
+  return buildPrompt({
+    ...promptBuilderState,
+    ...overrides,
+    stageId,
+    actionName: overrides.actionName || runtime.selectedAction || promptBuilderState.actionName,
+    direction: overrides.direction || promptBuilderState.direction || 'south',
+    cellSize: `${runtime.outputSettings.cellSize}x${runtime.outputSettings.cellSize}`,
+    backgroundColor: '#00FF00',
+    paletteLimit: promptBuilderState.paletteLimit || DEFAULT_PROMPT_VALUES.paletteLimit,
+    outputSheetColumns: String(runtime.outputSettings.columns || 5),
+    outputSheetRows: String(runtime.outputSettings.rows || 2),
+    footAnchorX: String(runtime.outputSettings.footAnchorX || 128),
+    footAnchorY: String(runtime.outputSettings.footAnchorY || 255),
+  });
+}
+
 function populateSelect(selectEl, options) {
   if (!selectEl) return;
   selectEl.innerHTML = '';
@@ -319,7 +346,9 @@ async function copyPromptBuilderText() {
   } catch {
     const els = getPromptEls();
     els.output?.select();
-    document.execCommand('copy');
+    if (typeof document.execCommand === 'function') {
+      document.execCommand('copy');
+    }
     addActivity('Copied prompt builder text', 'success');
   }
 }
@@ -327,12 +356,79 @@ async function copyPromptBuilderText() {
 async function sendPromptToProvider() {
   const prompt = renderPromptBuilder();
   const els = getPromptEls();
-  const provider = promptBuilderState.providerId || 'mock';
-  await copyPromptBuilderText();
-  if (els.status) {
-    els.status.textContent = provider === 'openai'
-      ? 'Prompt copied for OpenAI handoff'
-      : 'Prompt copied for provider handoff';
+  const providerMode = promptBuilderState.providerId || runtime.provider || 'mock';
+  const referenceImage = runtime.referenceImage || null;
+  const stageId = promptBuilderState.stageId || 'south_front_anchor';
+  const providerLabel = providerMode === 'openai' ? 'OpenAI' : 'Mock';
+  const generationStageIds = new Set([
+    'south_front_anchor',
+    'south_front_anchor_generation',
+    'directional_anchors_nsew',
+    'action_pose_board',
+    'action_pose_board_generation',
+  ]);
+  const requestSize = generationStageIds.has(stageId)
+    ? '1024x1024'
+    : `${runtime.outputSettings.cellSize}x${runtime.outputSettings.cellSize}`;
+
+  try {
+    const result = providerMode === 'openai'
+      ? (generationStageIds.has(stageId)
+        || !referenceImage
+        ? await remoteGenerate(prompt, 'openai', {
+          stageId,
+          size: requestSize,
+          quality: 'low',
+          background: 'opaque',
+          label: promptBuilderState.actionName || runtime.selectedAction || 'Sprite Prompt',
+        })
+        : { dataUrl: await remoteEdit(prompt, referenceImage, 'openai') })
+      : await (new MockImageProvider({
+        width: Number(promptBuilderState.cellSize) || 512,
+        height: Number(promptBuilderState.cellSize) || 512,
+      })).generateImage({
+        prompt,
+        stageId,
+        quality: 'low',
+        background: 'opaque',
+      });
+
+    runtime.provider = providerMode;
+    runtime.previews.live = result.dataUrl;
+    runtime.previews.animation = result.dataUrl;
+    runtime.previews.sidebarAnimation = result.dataUrl;
+    if (!runtime.referenceImage) {
+      runtime.referenceImage = result.dataUrl;
+      runtime.referenceImageName = runtime.referenceImageName || `${providerMode}-prompt-result.png`;
+      runtime.previews.reference = result.dataUrl;
+      runtime.previews.compareRaw = result.dataUrl;
+    }
+    runtime.currentStage = promptBuilderState.stageId === 'south_front_anchor'
+      ? 'reference'
+      : promptBuilderState.stageId === 'directional_anchors_nsew'
+        ? 'directional'
+        : promptBuilderState.stageId === 'runtime_normalize_and_align'
+          ? 'export'
+          : 'animation';
+    runtime.lastError = '';
+    addActivity(`Sent prompt to ${providerLabel} provider`, 'success');
+    await refreshPreviews();
+    updateProviderBadge();
+    updateCurrentStageBadge();
+    updateButtonStates();
+    saveRuntime();
+    syncSharedState({ promptBuilder: promptBuilderState });
+    if (els.status) {
+      els.status.dataset.status = 'complete';
+      els.status.textContent = `Sent to ${providerLabel} provider`;
+    }
+  } catch (error) {
+    addWarning(error.message || 'Prompt send failed.', 'provider');
+    await copyPromptBuilderText();
+    if (els.status) {
+      els.status.dataset.status = 'warning';
+      els.status.textContent = 'Prompt copied for handoff';
+    }
   }
 }
 
@@ -458,15 +554,40 @@ function setProjectStatus(status, text) {
 }
 
 function updateProviderBadge() {
-  const hasKey = !!storage.getApiKey();
   const providerText = runtime.provider === 'mock'
     ? 'Mock provider'
-    : hasKey
+    : openAIStatus === 'ready'
       ? 'OpenAI provider'
-      : 'OpenAI provider needs key';
-  const providerStatus = runtime.provider === 'mock' ? 'complete' : hasKey ? 'running' : 'warning';
+      : openAIStatus === 'missing'
+        ? 'OpenAI server key missing'
+        : 'OpenAI provider status unknown';
+  const providerStatus = runtime.provider === 'mock' ? 'complete' : openAIStatus === 'ready' ? 'running' : openAIStatus === 'missing' ? 'missing' : 'warning';
   setBadge('providerBadge', providerStatus, providerText);
-  setBadge('apiKeyStatus', runtime.provider === 'mock' ? 'connected' : hasKey ? 'connected' : 'missing', runtime.provider === 'mock' ? 'Mock mode' : hasKey ? 'OpenAI key saved locally' : 'OpenAI key missing');
+  setBadge('apiKeyStatus', runtime.provider === 'mock' ? 'connected' : openAIStatus === 'ready' ? 'connected' : openAIStatus === 'missing' ? 'missing' : 'warning', runtime.provider === 'mock' ? 'Mock mode' : openAIStatus === 'ready' ? 'OpenAI server ready' : openAIStatus === 'missing' ? 'OpenAI key missing on server' : 'OpenAI server status unknown');
+}
+
+async function refreshOpenAIStatus() {
+  if (typeof fetch !== 'function') {
+    openAIStatus = 'unknown';
+    updateProviderBadge();
+    updateButtonStates();
+    return;
+  }
+
+  try {
+    const response = await fetch('/health');
+    if (!response.ok) {
+      openAIStatus = 'unknown';
+    } else {
+      const data = await response.json().catch(() => null);
+      openAIStatus = data?.openaiConfigured ? 'ready' : 'missing';
+    }
+  } catch {
+    openAIStatus = 'unknown';
+  }
+
+  updateProviderBadge();
+  updateButtonStates();
 }
 
 function updateCurrentStageBadge() {
@@ -667,7 +788,7 @@ function getAnchorPoint() {
 }
 
 function getHasApiKey() {
-  return !!storage.getApiKey();
+  return openAIStatus === 'ready';
 }
 
 function shouldRequireOpenAI() {
@@ -687,7 +808,7 @@ function canRunAnimationStage() {
 }
 
 function showMissingOpenAIKeyMessage(stageLabel = 'this action') {
-  const message = `OpenAI mode is selected but no API key is saved locally. Switch to Mock mode or set OPENAI_API_KEY before ${stageLabel}.`;
+  const message = `OpenAI mode is selected but the server-side OPENAI_API_KEY is not configured. Switch to Mock mode or set OPENAI_API_KEY before ${stageLabel}.`;
   setLastError(message);
   addWarning(message, 'provider');
   return message;
@@ -1020,12 +1141,12 @@ async function generateMockSheet() {
 
 function collectValidationWarnings() {
   const warnings = [];
-  if (!runtime.referenceImage) warnings.push('Upload a reference image before running anchor or animation stages.');
+  if (runtime.provider !== 'openai' && !runtime.referenceImage) warnings.push('Upload a reference image before running anchor or animation stages.');
   if (!runtime.selectedAction) warnings.push('Choose an action in the Animation Builder.');
   if (!runtime.frames.length) warnings.push('No animation frames are available yet.');
   if (runtime.outputSettings.footAnchorX < 0 || runtime.outputSettings.footAnchorY < 0) warnings.push('Foot anchor coordinates must be positive.');
   if (runtime.outputSettings.columns * runtime.outputSettings.rows < runtime.frames.length) warnings.push('Sheet dimensions are smaller than the generated frame count.');
-  if (runtime.provider === 'openai' && !getHasApiKey()) warnings.push('OpenAI mode is selected but no API key is saved locally.');
+  if (runtime.provider === 'openai' && openAIStatus === 'missing') warnings.push('OpenAI mode is selected but the server-side OPENAI_API_KEY is missing.');
   return warnings;
 }
 
@@ -1055,22 +1176,25 @@ function renderValidationSnapshot() {
 
 function updateButtonStates() {
   const hasReference = !!runtime.referenceImage;
+  const hasAnchor = !!runtime.previews.anchor;
+  const hasDirectional = !!runtime.previews.direction;
+  const hasGenerationSource = hasReference || hasAnchor || hasDirectional || !!runtime.poseBoard;
   const hasFrames = runtime.frames.length > 0;
   const hasSelectedFrame = runtime.selectedFrameIndex >= 0 && !!runtime.frames[runtime.selectedFrameIndex];
   const hasAction = !!runtime.selectedAction;
 
   const disable = {
-    generateSouthAnchorBtn: !hasReference,
-    pixelSnapAnchorBtn: !hasReference || (!runtime.previews.anchor && !runtime.referenceImage),
-    validateAnchorBtn: !hasReference || (!runtime.previews.anchor && !runtime.referenceImage),
+    generateSouthAnchorBtn: runtime.provider === 'openai' ? false : !hasReference,
+    pixelSnapAnchorBtn: !hasGenerationSource,
+    validateAnchorBtn: !hasGenerationSource,
     downloadAnchorBtn: !runtime.previews.anchor,
-    compareRawSnappedBtn: !hasReference,
-    generateDirectionsBtn: !hasReference,
-    snapDirectionsBtn: !hasReference,
+    compareRawSnappedBtn: !hasGenerationSource,
+    generateDirectionsBtn: runtime.provider === 'openai' ? false : !hasGenerationSource,
+    snapDirectionsBtn: !hasGenerationSource,
     validateDirectionsBtn: !runtime.previews.direction,
-    previewDirectionGridBtn: !hasReference,
-    generatePoseBoardBtn: !hasReference || !hasAction,
-    recoverFramesBtn: !hasReference && !hasFrames,
+    previewDirectionGridBtn: !hasGenerationSource,
+    generatePoseBoardBtn: runtime.provider === 'openai' ? !hasAction : (!hasGenerationSource || !hasAction),
+    recoverFramesBtn: !runtime.poseBoard && !hasFrames,
     pixelSnapFramesBtn: !hasFrames,
     cleanBackgroundBtn: !hasFrames,
     normalizeRuntimeSheetBtn: !hasFrames,
@@ -1091,7 +1215,7 @@ function updateButtonStates() {
     exportGifBtn: !hasFrames,
     exportZipBtn: !hasFrames,
     exportReportBtn: !runtime.validationReport,
-    runFullPipelineBtn: !hasReference,
+    runFullPipelineBtn: runtime.provider === 'openai' ? false : !hasReference,
     runCurrentStageBtn: false,
     runQcValidationBtn: false,
     runMockDemoBtn: false,
@@ -1152,45 +1276,64 @@ async function uploadReferenceFromFile(file) {
 }
 
 async function generateSouthAnchor() {
-  if (runtime.provider === 'openai' && !getHasApiKey()) {
-    showMissingOpenAIKeyMessage('generating a south anchor');
-    updateButtonStates();
-    return;
-  }
-  if (!runtime.referenceImage && runtime.provider !== 'mock') {
-    setLastError('Upload a reference image before generating a south anchor.');
-    setStageStatus('reference', 'failed', 'Missing reference');
-    updateButtonStates();
-    return;
-  }
   setCurrentStage('reference');
   setStageStatus('reference', 'running', 'Generating south anchor');
   addActivity('Generating south anchor', 'info');
-  await sleep(350);
-  const anchorPoint = getAnchorPoint();
-  runtime.previews.anchor = await makePreview({
-    source: runtime.referenceImage,
-    title: 'South Anchor',
-    subtitle: runtime.referenceImageName || 'Reference image',
-    anchor: anchorPoint,
-    footer: `Foot anchor ${anchorPoint.x}, ${anchorPoint.y}`
-  });
-  runtime.previews.compareSnapped = runtime.previews.anchor;
-  runtime.previews.compareRaw = runtime.referenceImage || runtime.previews.compareRaw;
-  runtime.previews.sidebarAnimation = runtime.previews.anchor;
-  await refreshPreviews();
-  setStageStatus('reference', 'complete', 'South anchor ready');
-  addActivity('South anchor generated', 'success');
+  try {
+    const anchorPoint = getAnchorPoint();
+    if (runtime.provider === 'openai') {
+      const prompt = buildProductionPrompt('south_front_anchor');
+      const result = await remoteGenerate(prompt, 'openai', {
+        stageId: 'south_front_anchor_generation',
+        size: '1024x1024',
+        quality: 'low',
+        background: 'opaque',
+        label: 'South / Front Anchor',
+      });
+
+      runtime.previews.anchor = result.dataUrl;
+      runtime.previews.compareSnapped = result.dataUrl;
+      runtime.previews.compareRaw = runtime.referenceImage || result.dataUrl;
+      runtime.previews.sidebarAnimation = result.dataUrl;
+      if (!runtime.referenceImage) {
+        runtime.referenceImage = result.dataUrl;
+        runtime.referenceImageName = runtime.referenceImageName || 'openai-south-anchor.png';
+        runtime.previews.reference = result.dataUrl;
+      }
+      runtime.lastError = '';
+      await refreshPreviews();
+    } else {
+      await sleep(350);
+      runtime.previews.anchor = await makePreview({
+        source: runtime.referenceImage,
+        title: 'South Anchor',
+        subtitle: runtime.referenceImageName || 'Reference image',
+        anchor: anchorPoint,
+        footer: `Foot anchor ${anchorPoint.x}, ${anchorPoint.y}`
+      });
+      runtime.previews.compareSnapped = runtime.previews.anchor;
+      runtime.previews.compareRaw = runtime.referenceImage || runtime.previews.compareRaw;
+      runtime.previews.sidebarAnimation = runtime.previews.anchor;
+      await refreshPreviews();
+    }
+    setStageStatus('reference', 'complete', 'South anchor ready');
+    addActivity('South anchor generated', 'success');
+  } catch (error) {
+    setLastError(error.message || 'South anchor generation failed');
+    setStageStatus('reference', 'failed', 'South anchor failed');
+    addActivity(error.message || 'South anchor generation failed', 'error');
+  }
   updateButtonStates();
 }
 
 async function pixelSnapAnchor() {
-  if (!runtime.referenceImage) return;
+  const source = runtime.referenceImage || runtime.previews.anchor;
+  if (!source) return;
   setCurrentStage('reference');
   setStageStatus('reference', 'running', 'Pixel snapping anchor');
   await sleep(220);
   runtime.previews.anchor = await makePreview({
-    source: runtime.referenceImage,
+    source,
     title: 'Snapped South Anchor',
     subtitle: 'Aligned to output grid',
     anchor: getAnchorPoint(),
@@ -1227,11 +1370,12 @@ async function downloadAnchor() {
 }
 
 async function compareRawVsSnapped() {
-  if (!runtime.referenceImage) return;
-  runtime.previews.compareRaw = runtime.referenceImage;
+  const rawSource = runtime.referenceImage || runtime.previews.anchor;
+  if (!rawSource) return;
+  runtime.previews.compareRaw = rawSource;
   if (!runtime.previews.anchor) {
     runtime.previews.compareSnapped = await makePreview({
-      source: runtime.referenceImage,
+      source: rawSource,
       title: 'Snapped',
       subtitle: 'Awaiting anchor generation',
       anchor: getAnchorPoint(),
@@ -1245,25 +1389,44 @@ async function compareRawVsSnapped() {
 }
 
 async function generateDirectionalAnchors() {
-  if (runtime.provider === 'openai' && !getHasApiKey()) {
-    showMissingOpenAIKeyMessage('generating NSEW anchors');
-    updateButtonStates();
-    return;
-  }
-  if (!runtime.referenceImage && runtime.provider !== 'mock') return;
   setCurrentStage('directional');
   setStageStatus('directional', 'running', 'Generating NSEW anchors');
-  await sleep(300);
-  runtime.previews.direction = await makePreview({
-    source: runtime.referenceImage,
-    title: 'NSEW Direction Grid',
-    subtitle: 'North, South, East, West anchor validation',
-    anchor: getAnchorPoint(),
-    footer: `Action ${runtime.selectedAction}`
-  });
-  await refreshPreviews();
-  setStageStatus('directional', 'complete', 'Directional anchors ready');
-  addActivity('Directional anchors generated', 'success');
+  try {
+    if (runtime.provider === 'openai') {
+      const prompt = buildProductionPrompt('directional_anchors_nsew');
+      const result = await remoteGenerate(prompt, 'openai', {
+        stageId: 'directional_anchors_nsew',
+        size: '1024x1024',
+        quality: 'low',
+        background: 'opaque',
+        label: 'Directional Anchors NSEW',
+      });
+
+      runtime.previews.direction = result.dataUrl;
+      runtime.previews.sidebarAnimation = result.dataUrl;
+      if (!runtime.referenceImage && runtime.previews.anchor) {
+        runtime.referenceImage = runtime.previews.anchor;
+      }
+      runtime.lastError = '';
+      await refreshPreviews();
+    } else {
+      await sleep(300);
+      runtime.previews.direction = await makePreview({
+        source: runtime.referenceImage,
+        title: 'NSEW Direction Grid',
+        subtitle: 'North, South, East, West anchor validation',
+        anchor: getAnchorPoint(),
+        footer: `Action ${runtime.selectedAction}`
+      });
+      await refreshPreviews();
+    }
+    setStageStatus('directional', 'complete', 'Directional anchors ready');
+    addActivity('Directional anchors generated', 'success');
+  } catch (error) {
+    setLastError(error.message || 'Directional anchor generation failed');
+    setStageStatus('directional', 'failed', 'Directional anchors failed');
+    addActivity(error.message || 'Directional anchor generation failed', 'error');
+  }
   updateButtonStates();
 }
 
@@ -1296,9 +1459,10 @@ function validateDirectionalAnchors() {
 }
 
 async function previewDirectionGrid() {
-  if (!runtime.referenceImage) return;
+  const source = runtime.referenceImage || runtime.previews.anchor || runtime.previews.direction;
+  if (!source) return;
   runtime.previews.direction = await makePreview({
-    source: runtime.referenceImage,
+    source,
     title: 'Preview Direction Grid',
     subtitle: 'NSEW anchor visualizer',
     anchor: getAnchorPoint(),
@@ -1309,15 +1473,6 @@ async function previewDirectionGrid() {
 }
 
 async function generatePoseBoard() {
-  if (runtime.provider === 'openai' && !getHasApiKey()) {
-    showMissingOpenAIKeyMessage('generating a pose board');
-    updateButtonStates();
-    return;
-  }
-  if (!runtime.referenceImage) {
-    setLastError('Upload a reference image before generating a pose board.');
-    return;
-  }
   if (!runtime.selectedAction) {
     setLastError('Choose an action before generating a pose board.');
     return;
@@ -1325,22 +1480,50 @@ async function generatePoseBoard() {
   setCurrentStage('animation');
   setStageStatus('animation', 'running', `Generating ${runtime.selectedAction} pose board`);
   addActivity(`Generating pose board for ${runtime.selectedAction}`, 'info');
-  await sleep(350);
-  runtime.poseBoard = await makePreview({
-    source: runtime.referenceImage,
-    title: `Pose Board - ${runtime.selectedAction}`,
-    subtitle: `Cell ${runtime.outputSettings.cellSize}px`,
-    anchor: getAnchorPoint(),
-    footer: `${runtime.outputSettings.columns}x${runtime.outputSettings.rows}`
-  });
-  const source = runtime.poseBoard || runtime.referenceImage;
-  await createFrameSet({ baseSource: source, count: frameCount(), labelPrefix: runtime.selectedAction });
-  runtime.previews.animation = runtime.poseBoard;
-  runtime.previews.sidebarAnimation = runtime.poseBoard;
-  await generateMockSheet();
-  await refreshPreviews();
-  setStageStatus('animation', 'complete', 'Pose board ready');
-  addActivity('Pose board generated', 'success');
+  try {
+    if (runtime.provider === 'openai') {
+      const prompt = buildProductionPrompt('action_pose_board', { actionName: runtime.selectedAction });
+      const result = await remoteGenerate(prompt, 'openai', {
+        stageId: 'action_pose_board_generation',
+        size: '1024x1024',
+        quality: 'low',
+        background: 'opaque',
+        label: `Pose Board - ${runtime.selectedAction}`,
+      });
+
+      runtime.poseBoard = result.dataUrl;
+      runtime.previews.animation = result.dataUrl;
+      runtime.previews.sidebarAnimation = result.dataUrl;
+      if (!runtime.referenceImage) {
+        runtime.referenceImage = runtime.previews.anchor || result.dataUrl;
+      }
+      runtime.lastError = '';
+      await createFrameSet({ baseSource: runtime.poseBoard, count: frameCount(), labelPrefix: runtime.selectedAction });
+      await generateMockSheet();
+      await refreshPreviews();
+    } else {
+      await sleep(350);
+      runtime.poseBoard = await makePreview({
+        source: runtime.referenceImage,
+        title: `Pose Board - ${runtime.selectedAction}`,
+        subtitle: `Cell ${runtime.outputSettings.cellSize}px`,
+        anchor: getAnchorPoint(),
+        footer: `${runtime.outputSettings.columns}x${runtime.outputSettings.rows}`
+      });
+      const source = runtime.poseBoard || runtime.referenceImage;
+      await createFrameSet({ baseSource: source, count: frameCount(), labelPrefix: runtime.selectedAction });
+      runtime.previews.animation = runtime.poseBoard;
+      runtime.previews.sidebarAnimation = runtime.poseBoard;
+      await generateMockSheet();
+      await refreshPreviews();
+    }
+    setStageStatus('animation', 'complete', 'Pose board ready');
+    addActivity('Pose board generated', 'success');
+  } catch (error) {
+    setLastError(error.message || 'Pose board generation failed');
+    setStageStatus('animation', 'failed', 'Pose board failed');
+    addActivity(error.message || 'Pose board generation failed', 'error');
+  }
   updateButtonStates();
 }
 
@@ -1576,6 +1759,7 @@ function slugify(value) {
 async function newProject() {
   stopAnimationPreview();
   runtime = structuredClone(DEFAULT_RUNTIME);
+  openAIStatus = 'unknown';
   runtime.projectName = `Project ${new Date().toLocaleDateString().replaceAll('/', '-')}`;
   localStorage.removeItem(STORAGE_KEY);
   runtime.referenceImage = null;
@@ -1588,16 +1772,23 @@ async function newProject() {
   runtime.lastError = '';
   runtime.pipelineProgress = 0;
   addActivity('Started a new project', 'success');
-  syncSharedState({ apiKey: storage.getApiKey() || '' });
   refreshEverything();
   await refreshPreviews();
+  await refreshOpenAIStatus();
 }
 
 async function loadProjectFromFile(file) {
   if (!file) return;
   const text = await file.text();
   const parsed = JSON.parse(text);
+  if (parsed.apiKey || parsed.provider?.apiKey) {
+    delete parsed.apiKey;
+    if (parsed.provider) {
+      delete parsed.provider.apiKey;
+    }
+  }
   runtime = mergeRuntime(DEFAULT_RUNTIME, parsed);
+  openAIStatus = 'unknown';
   runtime.running = false;
   runtime.lastError = '';
   runtime.stageStatus = { ...DEFAULT_RUNTIME.stageStatus, ...(parsed.stageStatus || {}) };
@@ -1621,6 +1812,7 @@ async function loadProjectFromFile(file) {
   await refreshPreviews();
   await refreshLivePreview();
   saveRuntime();
+  await refreshOpenAIStatus();
 }
 
 function saveProject() {
@@ -1651,6 +1843,7 @@ function saveProject() {
 async function resetProject() {
   stopAnimationPreview();
   runtime = structuredClone(DEFAULT_RUNTIME);
+  openAIStatus = 'unknown';
   runtime.provider = $('providerSelect')?.value || 'mock';
   runtime.projectName = $('projectNameInput')?.value || 'Untitled Project';
   runtime.outputSettings.backgroundMode = $('backgroundModeSelect')?.value || 'chroma-green';
@@ -1676,6 +1869,7 @@ async function resetProject() {
   addActivity('Reset project state', 'warning');
   refreshEverything();
   await refreshPreviews();
+  await refreshOpenAIStatus();
 }
 
 async function mockDemoRun() {
@@ -1709,24 +1903,15 @@ async function mockDemoRun() {
 }
 
 async function runFullProductionPipeline() {
-  if (runtime.provider === 'openai' && !getHasApiKey()) {
-    addWarning('Switch to Mock mode or provide an OpenAI API key first.', 'provider');
-    setStageStatus('setup', 'failed', 'OpenAI key missing');
-    return;
-  }
-
   runtime.running = true;
   setProjectStatus('running', 'Pipeline running');
   addActivity('Running full production pipeline', 'info');
   updateButtonStates();
 
   try {
-    if (!runtime.referenceImage) {
-      if (runtime.provider === 'mock') {
-        await mockDemoRun();
-        return;
-      }
-      throw new Error('Upload a reference image before running the full pipeline.');
+    if (runtime.provider === 'mock' && !runtime.referenceImage) {
+      await mockDemoRun();
+      return;
     }
 
     setStageStatus('setup', 'complete', 'Project configured');
@@ -1803,6 +1988,7 @@ function bindButtons() {
     setCurrentStage('setup');
     updateButtonStates();
     addActivity(`Provider changed to ${runtime.provider}`, 'info');
+    refreshOpenAIStatus();
   });
 
   ['cellSizeInput', 'fpsInput', 'columnsInput', 'rowsInput', 'footAnchorXInput', 'footAnchorYInput', 'backgroundModeSelect', 'actionSelect'].forEach(id => {
@@ -1819,10 +2005,8 @@ function bindButtons() {
   });
 
   $('apiKey')?.addEventListener('input', () => {
-    storage.setApiKey($('apiKey').value);
-    updateProviderBadge();
-    updateButtonStates();
-    addActivity(storage.getApiKey() ? 'OpenAI key saved locally' : 'OpenAI key cleared', storage.getApiKey() ? 'success' : 'warning');
+    addActivity('OpenAI key input is ignored. Set OPENAI_API_KEY on the server instead.', 'warning');
+    $('apiKey').value = '';
   });
 
   const promptInputIds = [
@@ -1944,11 +2128,11 @@ async function init() {
   await renderPlaceholderPreview('sheet', 'Spritesheet Preview', 'Waiting for frames');
   updateButtonStates();
   updatePipelineProgress();
-  syncSharedState({ apiKey: storage.getApiKey() || '' });
   if (!runtime.activity.length) {
     addActivity('Dashboard ready', 'success');
   }
   updateButtonStates();
+  await refreshOpenAIStatus();
 }
 
 function sleep(ms) {
@@ -2026,9 +2210,6 @@ function bootstrapFromSharedState() {
     if (typeof window !== 'undefined') {
       window.spritePromptBuilderState = promptBuilderState;
     }
-  }
-  if (shared.apiKey && !storage.getApiKey()) {
-    storage.setApiKey(shared.apiKey);
   }
 }
 

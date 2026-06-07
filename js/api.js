@@ -1,6 +1,5 @@
 import { getState } from './state.js';
 import { STYLE_PROMPTS, generateSpritePrompt } from './prompts.js';
-import { MockImageProvider } from './pipeline/providers/mockProvider.js';
 
 export async function readFileAsDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -53,34 +52,57 @@ async function convertToPNG(file) {
   });
 }
 
-async function remoteEdit(prompt, imageDataUrl, providerMode = 'auto') {
+async function requestProviderImage(payload = {}) {
   const response = await fetch('/api/pipeline/providers/edit', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      prompt,
-      imageDataUrl,
-      model: 'gpt-image-1',
-      size: '1024x1024',
-      quality: 'low',
-      background: 'opaque',
-      providerMode,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null);
-    throw new Error(errorData?.error || errorData?.message || `Image edit failed with status ${response.status}`);
+    const error = new Error(errorData?.error || errorData?.message || `Image request failed with status ${response.status}`);
+    error.code = errorData?.code || 'image_request_failed';
+    throw error;
   }
 
-  const payload = await response.json();
-  if (!payload?.dataUrl) {
-    throw new Error('Image edit endpoint did not return an image.');
+  const responsePayload = await response.json();
+  if (!responsePayload?.dataUrl) {
+    throw new Error('Provider endpoint did not return an image.');
   }
+
+  return responsePayload;
+}
+
+export async function remoteEdit(prompt, imageDataUrl, providerMode = 'auto') {
+  const payload = await requestProviderImage({
+    prompt,
+    imageDataUrl,
+    model: 'gpt-image-1',
+    size: '1024x1024',
+    quality: 'low',
+    background: 'opaque',
+    providerMode,
+  });
 
   return payload.dataUrl;
+}
+
+export async function remoteGenerate(prompt, providerMode = 'openai', options = {}) {
+  const payload = await requestProviderImage({
+    prompt,
+    providerMode,
+    stageId: options.stageId || 'south_front_anchor_generation',
+    size: options.size || '1024x1024',
+    quality: options.quality || 'low',
+    background: options.background || 'opaque',
+    label: options.label || '',
+    seed: options.seed || '',
+  });
+
+  return payload;
 }
 
 export async function callOpenAIEdit(prompt, imageFile, apiKey) {
@@ -91,22 +113,7 @@ export async function callOpenAIEdit(prompt, imageFile, apiKey) {
   }
 
   const imageDataUrl = await readFileAsDataURL(imageFile);
-
-  try {
-    return await remoteEdit(prompt, imageDataUrl, state.provider?.mode || 'auto');
-  } catch (error) {
-    console.warn('Remote edit request failed, falling back to mock provider.', error);
-    const mockProvider = new MockImageProvider();
-    const fallback = await mockProvider.editImage({
-      stageId: 'api-call-fallback',
-      prompt,
-      image: imageDataUrl,
-      label: 'Mock Edit Fallback',
-      width: 512,
-      height: 512,
-    });
-    return fallback.dataUrl;
-  }
+  return remoteEdit(prompt, imageDataUrl, state.provider?.mode || 'auto');
 }
 
 export async function generateSpriteStyles(imageFile) {

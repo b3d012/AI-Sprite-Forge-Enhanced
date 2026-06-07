@@ -27,7 +27,7 @@ This is the best first pass for new developers.
    - upload controls render
    - preview placeholders show up
    - mock pipeline buttons remain usable in Mock mode
-   - OpenAI mode shows a helpful missing-key message when no key is saved
+   - OpenAI mode shows a helpful server-side missing-key message when `OPENAI_API_KEY` is not set
 
 ### Expected Output
 
@@ -60,9 +60,9 @@ Use this only when you want to confirm the OpenAI path.
 ### Steps
 
 1. Set `OPENAI_API_KEY` in your shell or environment
-2. Enter the same key in the UI if you are using the browser generation flow
-3. Upload a reference image
-4. Generate a style preview or action frames
+2. Restart the server so it can read the updated environment
+3. Upload a reference image only if you are testing an edit stage
+4. Generate a scratch anchor or action board in OpenAI mode, or run the smoke check script
 
 ### Expected Output
 
@@ -70,6 +70,7 @@ Use this only when you want to confirm the OpenAI path.
 - frame downloads become available
 - ZIP download buttons work when frames are produced
 - transparent-background prompts produce transparent or near-transparent results depending on model output
+- `npm run check:openai-smoke` passes when the key is available
 
 ## 4. Manual Checks To Run Every Time
 
@@ -83,7 +84,7 @@ Use this only when you want to confirm the OpenAI path.
 
 ### Missing API Key
 
-If OpenAI mode is selected without a saved key, the dashboard should show a clear warning and keep working in Mock mode.
+If OpenAI mode is selected without `OPENAI_API_KEY`, the dashboard should show a clear warning and keep working in Mock mode.
 
 ### Blank Or Broken Preview
 
@@ -111,7 +112,7 @@ That usually means one of these:
 
 ### Real API Returns A Format Error
 
-Check the response structure. The current browser code expects base64 image data in the first result item.
+Check the response structure. The server now accepts base64 image data, URL payloads, and a few nested response shapes before normalizing them into a data URL.
 
 ## 6. Suggested Regression List
 

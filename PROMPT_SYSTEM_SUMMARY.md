@@ -72,6 +72,5 @@ This update adds a production-oriented prompt system for sprite pipeline work.
 ## Notes
 
 - The prompt builder works without an API key.
-- The "Send prompt to selected provider" button falls back to prompt copy/handoff behavior when a live provider route is not available in this fork.
+- The "Send prompt to selected provider" button now uses the repo's existing provider classes. It renders through the selected provider when possible and falls back to prompt copy/handoff behavior if no key or reference image is available.
 - No image processing logic was changed beyond aligning request settings with the new opaque chroma workflow.
-

@@ -2,6 +2,8 @@ import { getState, updateState } from './state.js';
 import {
   buildPrompt,
   getActionPresetOptions,
+  getLocalSdPresetOptions,
+  getLocalSdPreset,
   getProviderOptions,
   getPromptTemplateOptions,
   DEFAULT_PROMPT_VALUES,
@@ -17,7 +19,18 @@ const ACTIONS = ['idle', 'walk', 'attack', 'hurt', 'jump', 'death', 'cast', 'das
 const STAGES = ['setup', 'reference', 'directional', 'animation', 'aligner', 'export'];
 const PROMPT_FIELD_DEFAULTS = {
   ...DEFAULT_PROMPT_VALUES,
-  footAnchor: `${DEFAULT_PROMPT_VALUES.footAnchorX},${DEFAULT_PROMPT_VALUES.footAnchorY}`
+  footAnchor: `${DEFAULT_PROMPT_VALUES.footAnchorX},${DEFAULT_PROMPT_VALUES.footAnchorY}`,
+  localSdPresetId: 'custom',
+  finalPromptText: '',
+  finalPromptDirty: false,
+  negativePromptText: '',
+  negativePromptDirty: false,
+  localSdWidth: '1024',
+  localSdHeight: '1024',
+  localSdSteps: '25',
+  localSdCfgScale: '7',
+  localSdSamplerName: 'DPM++ 2M Karras',
+  localSdBatchSize: '1'
 };
 
 const PIPELINE_TO_PROMPT_STAGE = {
@@ -204,6 +217,7 @@ function getPromptEls() {
   return {
     stageSelect: $('stagePromptSelect'),
     providerSelect: $('promptProviderSelect'),
+    localSdPresetSelect: $('localSdPresetSelect'),
     actionChips: $('actionPresetChips'),
     actionName: $('promptActionName'),
     direction: $('promptDirection'),
@@ -217,6 +231,13 @@ function getPromptEls() {
     sheetColumns: $('promptSheetColumns'),
     sheetRows: $('promptSheetRows'),
     output: $('finalPromptOutput'),
+    negativeOutput: $('finalNegativePromptOutput'),
+    localSdWidth: $('localSdWidth'),
+    localSdHeight: $('localSdHeight'),
+    localSdSteps: $('localSdSteps'),
+    localSdCfgScale: $('localSdCfgScale'),
+    localSdSamplerName: $('localSdSamplerName'),
+    localSdBatchSize: $('localSdBatchSize'),
     copyBtn: $('copyPromptBtn'),
     sendBtn: $('sendPromptBtn'),
     resetBtn: $('resetPromptBtn'),
@@ -234,6 +255,7 @@ function updatePromptBuilderStateFromInputs() {
   promptBuilderState = {
     stageId: els.stageSelect?.value || PROMPT_FIELD_DEFAULTS.stageId,
     providerId: els.providerSelect?.value || PROMPT_FIELD_DEFAULTS.providerId,
+    localSdPresetId: els.localSdPresetSelect?.value || PROMPT_FIELD_DEFAULTS.localSdPresetId,
     actionName: els.actionName?.value?.trim() || PROMPT_FIELD_DEFAULTS.actionName,
     direction: els.direction?.value || PROMPT_FIELD_DEFAULTS.direction,
     coreIdentity: els.coreIdentity?.value?.trim() || PROMPT_FIELD_DEFAULTS.coreIdentity,
@@ -245,7 +267,17 @@ function updatePromptBuilderStateFromInputs() {
     outputSheetColumns: els.sheetColumns?.value?.trim() || PROMPT_FIELD_DEFAULTS.outputSheetColumns,
     outputSheetRows: els.sheetRows?.value?.trim() || PROMPT_FIELD_DEFAULTS.outputSheetRows,
     footAnchorX: footAnchor.footAnchorX,
-    footAnchorY: footAnchor.footAnchorY
+    footAnchorY: footAnchor.footAnchorY,
+    finalPromptText: promptBuilderState.finalPromptText || '',
+    finalPromptDirty: !!promptBuilderState.finalPromptDirty,
+    negativePromptText: promptBuilderState.negativePromptText || '',
+    negativePromptDirty: !!promptBuilderState.negativePromptDirty,
+    localSdWidth: els.localSdWidth?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdWidth,
+    localSdHeight: els.localSdHeight?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdHeight,
+    localSdSteps: els.localSdSteps?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdSteps,
+    localSdCfgScale: els.localSdCfgScale?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdCfgScale,
+    localSdSamplerName: els.localSdSamplerName?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdSamplerName,
+    localSdBatchSize: els.localSdBatchSize?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdBatchSize
   };
   runtime.promptBuilder = { ...promptBuilderState };
 
@@ -256,16 +288,134 @@ function updatePromptBuilderStateFromInputs() {
   return promptBuilderState;
 }
 
+function updatePromptTextStateFromInputs() {
+  const els = getPromptEls();
+  promptBuilderState = {
+    ...promptBuilderState,
+    finalPromptText: els.output?.value ?? '',
+    finalPromptDirty: true,
+    negativePromptText: els.negativeOutput?.value ?? '',
+    negativePromptDirty: true,
+  };
+  runtime.promptBuilder = { ...promptBuilderState };
+  if (typeof window !== 'undefined') {
+    window.spritePromptBuilderState = promptBuilderState;
+  }
+  syncSharedState({ promptBuilder: promptBuilderState });
+  return promptBuilderState;
+}
+
+function getLocalSdGenerationSettings() {
+  return {
+    width: Number.parseInt(promptBuilderState.localSdWidth, 10) || 1024,
+    height: Number.parseInt(promptBuilderState.localSdHeight, 10) || 1024,
+    steps: Number.parseInt(promptBuilderState.localSdSteps, 10) || 25,
+    cfg_scale: Number.parseFloat(promptBuilderState.localSdCfgScale) || 7,
+    sampler_name: promptBuilderState.localSdSamplerName || 'DPM++ 2M Karras',
+    batch_size: Math.max(1, Number.parseInt(promptBuilderState.localSdBatchSize, 10) || 1),
+  };
+}
+
+function applyLocalSdPreset(presetId) {
+  const preset = getLocalSdPreset(presetId);
+  const els = getPromptEls();
+  const nextPresetId = preset?.id || 'custom';
+
+  if (els.localSdPresetSelect) {
+    els.localSdPresetSelect.value = nextPresetId;
+  }
+  if (preset && nextPresetId !== 'custom') {
+    if (els.output) els.output.value = preset.promptTemplate || '';
+    if (els.negativeOutput) els.negativeOutput.value = preset.negativePrompt || '';
+    if (els.localSdWidth) els.localSdWidth.value = String(preset.settings?.width ?? PROMPT_FIELD_DEFAULTS.localSdWidth);
+    if (els.localSdHeight) els.localSdHeight.value = String(preset.settings?.height ?? PROMPT_FIELD_DEFAULTS.localSdHeight);
+    if (els.localSdSteps) els.localSdSteps.value = String(preset.settings?.steps ?? PROMPT_FIELD_DEFAULTS.localSdSteps);
+    if (els.localSdCfgScale) els.localSdCfgScale.value = String(preset.settings?.cfg_scale ?? PROMPT_FIELD_DEFAULTS.localSdCfgScale);
+    if (els.localSdSamplerName) els.localSdSamplerName.value = preset.settings?.sampler_name || PROMPT_FIELD_DEFAULTS.localSdSamplerName;
+    if (els.localSdBatchSize) els.localSdBatchSize.value = String(preset.settings?.batch_size ?? PROMPT_FIELD_DEFAULTS.localSdBatchSize);
+  }
+
+  promptBuilderState = {
+    ...promptBuilderState,
+    localSdPresetId: nextPresetId,
+    finalPromptText: els.output?.value ?? '',
+    finalPromptDirty: nextPresetId !== 'custom' ? false : promptBuilderState.finalPromptDirty,
+    negativePromptText: els.negativeOutput?.value ?? '',
+    negativePromptDirty: nextPresetId !== 'custom' ? false : promptBuilderState.negativePromptDirty,
+    localSdWidth: els.localSdWidth?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdWidth,
+    localSdHeight: els.localSdHeight?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdHeight,
+    localSdSteps: els.localSdSteps?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdSteps,
+    localSdCfgScale: els.localSdCfgScale?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdCfgScale,
+    localSdSamplerName: els.localSdSamplerName?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdSamplerName,
+    localSdBatchSize: els.localSdBatchSize?.value?.trim() || PROMPT_FIELD_DEFAULTS.localSdBatchSize
+  };
+
+  runtime.promptBuilder = { ...promptBuilderState };
+  if (typeof window !== 'undefined') {
+    window.spritePromptBuilderState = promptBuilderState;
+  }
+  syncSharedState({ promptBuilder: promptBuilderState });
+  renderPromptBuilder();
+}
+
 function renderPromptBuilder() {
   const els = getPromptEls();
-  const prompt = buildPrompt({ ...promptBuilderState });
+  const preset = getLocalSdPreset(promptBuilderState.localSdPresetId);
+  const stagePrompt = buildPrompt({ ...promptBuilderState });
+  const prompt = promptBuilderState.finalPromptDirty
+    ? (promptBuilderState.finalPromptText || '')
+    : (preset && preset.id !== 'custom' ? preset.promptTemplate : stagePrompt);
+  const negativePrompt = promptBuilderState.negativePromptDirty
+    ? (promptBuilderState.negativePromptText || '')
+    : (preset && preset.id !== 'custom' ? preset.negativePrompt : '');
   if (els.output) {
     els.output.value = prompt;
   }
+  if (els.negativeOutput) {
+    els.negativeOutput.value = negativePrompt;
+  }
+  if (els.localSdPresetSelect && els.localSdPresetSelect.value !== promptBuilderState.localSdPresetId) {
+    els.localSdPresetSelect.value = promptBuilderState.localSdPresetId;
+  }
+  if (els.localSdWidth && els.localSdWidth.value !== promptBuilderState.localSdWidth) {
+    els.localSdWidth.value = promptBuilderState.localSdWidth;
+  }
+  if (els.localSdHeight && els.localSdHeight.value !== promptBuilderState.localSdHeight) {
+    els.localSdHeight.value = promptBuilderState.localSdHeight;
+  }
+  if (els.localSdSteps && els.localSdSteps.value !== promptBuilderState.localSdSteps) {
+    els.localSdSteps.value = promptBuilderState.localSdSteps;
+  }
+  if (els.localSdCfgScale && els.localSdCfgScale.value !== promptBuilderState.localSdCfgScale) {
+    els.localSdCfgScale.value = promptBuilderState.localSdCfgScale;
+  }
+  if (els.localSdSamplerName && els.localSdSamplerName.value !== promptBuilderState.localSdSamplerName) {
+    els.localSdSamplerName.value = promptBuilderState.localSdSamplerName;
+  }
+  if (els.localSdBatchSize && els.localSdBatchSize.value !== promptBuilderState.localSdBatchSize) {
+    els.localSdBatchSize.value = promptBuilderState.localSdBatchSize;
+  }
   if (els.status) {
     els.status.dataset.status = 'running';
-    els.status.textContent = `Stage: ${promptBuilderState.stageId} | Provider: ${promptBuilderState.providerId}`;
+    els.status.textContent = `Stage: ${promptBuilderState.stageId} | Provider: ${promptBuilderState.providerId} | Preset: ${promptBuilderState.localSdPresetId}`;
   }
+  if (!promptBuilderState.finalPromptDirty) {
+    promptBuilderState = {
+      ...promptBuilderState,
+      finalPromptText: prompt,
+    };
+  }
+  if (!promptBuilderState.negativePromptDirty) {
+    promptBuilderState = {
+      ...promptBuilderState,
+      negativePromptText: negativePrompt,
+    };
+  }
+  runtime.promptBuilder = { ...promptBuilderState };
+  if (typeof window !== 'undefined') {
+    window.spritePromptBuilderState = promptBuilderState;
+  }
+  syncSharedState({ promptBuilder: promptBuilderState });
   return prompt;
 }
 
@@ -322,6 +472,7 @@ function resetPromptBuilder() {
   const els = getPromptEls();
   if (els.stageSelect) els.stageSelect.value = PROMPT_FIELD_DEFAULTS.stageId;
   if (els.providerSelect) els.providerSelect.value = PROMPT_FIELD_DEFAULTS.providerId;
+  if (els.localSdPresetSelect) els.localSdPresetSelect.value = PROMPT_FIELD_DEFAULTS.localSdPresetId;
   if (els.actionName) els.actionName.value = PROMPT_FIELD_DEFAULTS.actionName;
   if (els.direction) els.direction.value = PROMPT_FIELD_DEFAULTS.direction;
   if (els.coreIdentity) els.coreIdentity.value = PROMPT_FIELD_DEFAULTS.coreIdentity;
@@ -333,6 +484,21 @@ function resetPromptBuilder() {
   if (els.footAnchor) els.footAnchor.value = `${PROMPT_FIELD_DEFAULTS.footAnchorX},${PROMPT_FIELD_DEFAULTS.footAnchorY}`;
   if (els.sheetColumns) els.sheetColumns.value = PROMPT_FIELD_DEFAULTS.outputSheetColumns;
   if (els.sheetRows) els.sheetRows.value = PROMPT_FIELD_DEFAULTS.outputSheetRows;
+  if (els.output) els.output.value = PROMPT_FIELD_DEFAULTS.finalPromptText;
+  if (els.negativeOutput) els.negativeOutput.value = PROMPT_FIELD_DEFAULTS.negativePromptText;
+  if (els.localSdWidth) els.localSdWidth.value = PROMPT_FIELD_DEFAULTS.localSdWidth;
+  if (els.localSdHeight) els.localSdHeight.value = PROMPT_FIELD_DEFAULTS.localSdHeight;
+  if (els.localSdSteps) els.localSdSteps.value = PROMPT_FIELD_DEFAULTS.localSdSteps;
+  if (els.localSdCfgScale) els.localSdCfgScale.value = PROMPT_FIELD_DEFAULTS.localSdCfgScale;
+  if (els.localSdSamplerName) els.localSdSamplerName.value = PROMPT_FIELD_DEFAULTS.localSdSamplerName;
+  if (els.localSdBatchSize) els.localSdBatchSize.value = PROMPT_FIELD_DEFAULTS.localSdBatchSize;
+  promptBuilderState = {
+    ...PROMPT_FIELD_DEFAULTS,
+    finalPromptText: '',
+    finalPromptDirty: false,
+    negativePromptText: '',
+    negativePromptDirty: false
+  };
   updatePromptBuilderStateFromInputs();
   renderPromptBuilder();
 }
@@ -359,30 +525,59 @@ async function sendPromptToProvider() {
   const providerMode = promptBuilderState.providerId || runtime.provider || 'mock';
   const referenceImage = runtime.referenceImage || null;
   const stageId = promptBuilderState.stageId || 'south_front_anchor';
-  const providerLabel = providerMode === 'openai' ? 'OpenAI' : 'Mock';
-  const generationStageIds = new Set([
-    'south_front_anchor',
-    'south_front_anchor_generation',
-    'directional_anchors_nsew',
-    'action_pose_board',
-    'action_pose_board_generation',
-  ]);
-  const requestSize = generationStageIds.has(stageId)
-    ? '1024x1024'
-    : `${runtime.outputSettings.cellSize}x${runtime.outputSettings.cellSize}`;
+  const providerLabel = getProviderDisplayName(providerMode);
+  const generationSettings = getLocalSdGenerationSettings();
+  const negativePrompt = promptBuilderState.negativePromptDirty
+    ? (promptBuilderState.negativePromptText || '')
+    : (getLocalSdPreset(promptBuilderState.localSdPresetId)?.negativePrompt || '');
 
   try {
     const result = providerMode === 'openai'
-      ? (generationStageIds.has(stageId)
-        || !referenceImage
-        ? await remoteGenerate(prompt, 'openai', {
+      ? (referenceImage
+        ? { dataUrl: await remoteEdit(prompt, referenceImage, 'openai') }
+        : await remoteGenerate(prompt, 'openai', {
           stageId,
-          size: requestSize,
+          size: `${generationSettings.width}x${generationSettings.height}`,
+          width: generationSettings.width,
+          height: generationSettings.height,
+          negative_prompt: negativePrompt,
+          steps: generationSettings.steps,
+          cfg_scale: generationSettings.cfg_scale,
+          sampler_name: generationSettings.sampler_name,
+          batch_size: generationSettings.batch_size,
+          quality: 'low',
+          background: 'opaque',
+          label: promptBuilderState.actionName || runtime.selectedAction || 'Sprite Prompt',
+        }))
+      : providerMode === 'local' && referenceImage
+        ? { dataUrl: await remoteEdit(prompt, referenceImage, 'local', {
+          size: `${generationSettings.width}x${generationSettings.height}`,
+          width: generationSettings.width,
+          height: generationSettings.height,
+          negative_prompt: negativePrompt,
+          steps: generationSettings.steps,
+          cfg_scale: generationSettings.cfg_scale,
+          sampler_name: generationSettings.sampler_name,
+          batch_size: generationSettings.batch_size,
+          quality: 'low',
+          background: 'opaque',
+          label: promptBuilderState.actionName || runtime.selectedAction || 'Sprite Prompt',
+        }) }
+      : providerMode === 'local'
+        ? await remoteGenerate(prompt, 'local', {
+          stageId,
+          size: `${generationSettings.width}x${generationSettings.height}`,
+          width: generationSettings.width,
+          height: generationSettings.height,
+          negative_prompt: negativePrompt,
+          steps: generationSettings.steps,
+          cfg_scale: generationSettings.cfg_scale,
+          sampler_name: generationSettings.sampler_name,
+          batch_size: generationSettings.batch_size,
           quality: 'low',
           background: 'opaque',
           label: promptBuilderState.actionName || runtime.selectedAction || 'Sprite Prompt',
         })
-        : { dataUrl: await remoteEdit(prompt, referenceImage, 'openai') })
       : await (new MockImageProvider({
         width: Number(promptBuilderState.cellSize) || 512,
         height: Number(promptBuilderState.cellSize) || 512,
@@ -413,6 +608,7 @@ async function sendPromptToProvider() {
     runtime.lastError = '';
     addActivity(`Sent prompt to ${providerLabel} provider`, 'success');
     await refreshPreviews();
+    await refreshOpenAIStatus();
     updateProviderBadge();
     updateCurrentStageBadge();
     updateButtonStates();
@@ -436,6 +632,7 @@ function initializePromptBuilderControls() {
   const els = getPromptEls();
   populateSelect(els.stageSelect, getPromptTemplateOptions());
   populateSelect(els.providerSelect, getProviderOptions());
+  populateSelect(els.localSdPresetSelect, getLocalSdPresetOptions());
 
   if (els.actionChips) {
     els.actionChips.innerHTML = '';
@@ -455,6 +652,9 @@ function initializePromptBuilderControls() {
   }
   if (els.providerSelect) {
     els.providerSelect.value = promptBuilderState.providerId;
+  }
+  if (els.localSdPresetSelect) {
+    els.localSdPresetSelect.value = promptBuilderState.localSdPresetId || PROMPT_FIELD_DEFAULTS.localSdPresetId;
   }
 }
 
@@ -556,14 +756,38 @@ function setProjectStatus(status, text) {
 function updateProviderBadge() {
   const providerText = runtime.provider === 'mock'
     ? 'Mock provider'
+    : runtime.provider === 'local'
+      ? (openAIStatus === 'ready' ? 'Local Stable Diffusion ready' : openAIStatus === 'missing' ? 'Local Stable Diffusion not running' : 'Local Stable Diffusion status unknown')
+      : openAIStatus === 'ready'
+        ? 'OpenAI provider'
+        : openAIStatus === 'missing'
+          ? 'OpenAI server key missing'
+          : 'OpenAI provider status unknown';
+  const providerStatus = runtime.provider === 'mock'
+    ? 'complete'
     : openAIStatus === 'ready'
-      ? 'OpenAI provider'
+      ? 'running'
       : openAIStatus === 'missing'
-        ? 'OpenAI server key missing'
-        : 'OpenAI provider status unknown';
-  const providerStatus = runtime.provider === 'mock' ? 'complete' : openAIStatus === 'ready' ? 'running' : openAIStatus === 'missing' ? 'missing' : 'warning';
+        ? 'missing'
+        : 'warning';
   setBadge('providerBadge', providerStatus, providerText);
-  setBadge('apiKeyStatus', runtime.provider === 'mock' ? 'connected' : openAIStatus === 'ready' ? 'connected' : openAIStatus === 'missing' ? 'missing' : 'warning', runtime.provider === 'mock' ? 'Mock mode' : openAIStatus === 'ready' ? 'OpenAI server ready' : openAIStatus === 'missing' ? 'OpenAI key missing on server' : 'OpenAI server status unknown');
+  const apiStatusText = runtime.provider === 'mock'
+    ? 'Mock mode'
+    : runtime.provider === 'local'
+      ? (openAIStatus === 'ready' ? 'AUTOMATIC1111 reachable' : openAIStatus === 'missing' ? 'AUTOMATIC1111 not running' : 'AUTOMATIC1111 status unknown')
+      : openAIStatus === 'ready'
+        ? 'OpenAI server ready'
+        : openAIStatus === 'missing'
+          ? 'OpenAI key missing on server'
+          : 'OpenAI server status unknown';
+  const apiStatus = runtime.provider === 'mock'
+    ? 'connected'
+    : openAIStatus === 'ready'
+      ? 'connected'
+      : openAIStatus === 'missing'
+        ? 'missing'
+        : 'warning';
+  setBadge('apiKeyStatus', apiStatus, apiStatusText);
 }
 
 async function refreshOpenAIStatus() {
@@ -580,7 +804,11 @@ async function refreshOpenAIStatus() {
       openAIStatus = 'unknown';
     } else {
       const data = await response.json().catch(() => null);
-      openAIStatus = data?.openaiConfigured ? 'ready' : 'missing';
+      if (runtime.provider === 'local') {
+        openAIStatus = data?.automatic1111Configured ? 'ready' : 'missing';
+      } else {
+        openAIStatus = data?.openaiConfigured ? 'ready' : 'missing';
+      }
     }
   } catch {
     openAIStatus = 'unknown';
@@ -787,16 +1015,26 @@ function getAnchorPoint() {
   };
 }
 
+function isRemoteProvider(mode = runtime.provider) {
+  return mode === 'openai' || mode === 'local';
+}
+
+function getProviderDisplayName(mode = runtime.provider) {
+  if (mode === 'local') return 'Local Stable Diffusion';
+  if (mode === 'openai') return 'OpenAI';
+  return 'Mock';
+}
+
 function getHasApiKey() {
   return openAIStatus === 'ready';
 }
 
 function shouldRequireOpenAI() {
-  return runtime.provider === 'openai';
+  return runtime.provider === 'openai' || runtime.provider === 'local';
 }
 
 function canUseOpenAI() {
-  return !shouldRequireOpenAI() || getHasApiKey();
+  return runtime.provider === 'mock' || openAIStatus === 'ready';
 }
 
 function canRunReferenceStage() {
@@ -808,7 +1046,9 @@ function canRunAnimationStage() {
 }
 
 function showMissingOpenAIKeyMessage(stageLabel = 'this action') {
-  const message = `OpenAI mode is selected but the server-side OPENAI_API_KEY is not configured. Switch to Mock mode or set OPENAI_API_KEY before ${stageLabel}.`;
+  const message = runtime.provider === 'local'
+    ? 'Local Stable Diffusion is not running. Start AUTOMATIC1111 with --api and try again.'
+    : `OpenAI mode is selected but the server-side OPENAI_API_KEY is not configured. Switch to Mock mode or set OPENAI_API_KEY before ${stageLabel}.`;
   setLastError(message);
   addWarning(message, 'provider');
   return message;
@@ -1141,12 +1381,13 @@ async function generateMockSheet() {
 
 function collectValidationWarnings() {
   const warnings = [];
-  if (runtime.provider !== 'openai' && !runtime.referenceImage) warnings.push('Upload a reference image before running anchor or animation stages.');
+  if (!isRemoteProvider() && !runtime.referenceImage) warnings.push('Upload a reference image before running anchor or animation stages.');
   if (!runtime.selectedAction) warnings.push('Choose an action in the Animation Builder.');
   if (!runtime.frames.length) warnings.push('No animation frames are available yet.');
   if (runtime.outputSettings.footAnchorX < 0 || runtime.outputSettings.footAnchorY < 0) warnings.push('Foot anchor coordinates must be positive.');
   if (runtime.outputSettings.columns * runtime.outputSettings.rows < runtime.frames.length) warnings.push('Sheet dimensions are smaller than the generated frame count.');
   if (runtime.provider === 'openai' && openAIStatus === 'missing') warnings.push('OpenAI mode is selected but the server-side OPENAI_API_KEY is missing.');
+  if (runtime.provider === 'local' && openAIStatus === 'missing') warnings.push('Local Stable Diffusion is not running. Start AUTOMATIC1111 with --api and try again.');
   return warnings;
 }
 
@@ -1184,16 +1425,16 @@ function updateButtonStates() {
   const hasAction = !!runtime.selectedAction;
 
   const disable = {
-    generateSouthAnchorBtn: runtime.provider === 'openai' ? false : !hasReference,
+    generateSouthAnchorBtn: isRemoteProvider() ? false : !hasReference,
     pixelSnapAnchorBtn: !hasGenerationSource,
     validateAnchorBtn: !hasGenerationSource,
     downloadAnchorBtn: !runtime.previews.anchor,
     compareRawSnappedBtn: !hasGenerationSource,
-    generateDirectionsBtn: runtime.provider === 'openai' ? false : !hasGenerationSource,
+    generateDirectionsBtn: isRemoteProvider() ? false : !hasGenerationSource,
     snapDirectionsBtn: !hasGenerationSource,
     validateDirectionsBtn: !runtime.previews.direction,
     previewDirectionGridBtn: !hasGenerationSource,
-    generatePoseBoardBtn: runtime.provider === 'openai' ? !hasAction : (!hasGenerationSource || !hasAction),
+    generatePoseBoardBtn: isRemoteProvider() ? !hasAction : (!hasGenerationSource || !hasAction),
     recoverFramesBtn: !runtime.poseBoard && !hasFrames,
     pixelSnapFramesBtn: !hasFrames,
     cleanBackgroundBtn: !hasFrames,
@@ -1215,7 +1456,7 @@ function updateButtonStates() {
     exportGifBtn: !hasFrames,
     exportZipBtn: !hasFrames,
     exportReportBtn: !runtime.validationReport,
-    runFullPipelineBtn: runtime.provider === 'openai' ? false : !hasReference,
+    runFullPipelineBtn: isRemoteProvider() ? false : !hasReference,
     runCurrentStageBtn: false,
     runQcValidationBtn: false,
     runMockDemoBtn: false,
@@ -1281,11 +1522,20 @@ async function generateSouthAnchor() {
   addActivity('Generating south anchor', 'info');
   try {
     const anchorPoint = getAnchorPoint();
-    if (runtime.provider === 'openai') {
+    if (isRemoteProvider()) {
       const prompt = buildProductionPrompt('south_front_anchor');
-      const result = await remoteGenerate(prompt, 'openai', {
+      const generationSettings = getLocalSdGenerationSettings();
+      const negativePrompt = getLocalSdPreset(promptBuilderState.localSdPresetId)?.negativePrompt || '';
+      const result = await remoteGenerate(prompt, runtime.provider, {
         stageId: 'south_front_anchor_generation',
-        size: '1024x1024',
+        size: `${generationSettings.width}x${generationSettings.height}`,
+        width: generationSettings.width,
+        height: generationSettings.height,
+        negative_prompt: negativePrompt,
+        steps: generationSettings.steps,
+        cfg_scale: generationSettings.cfg_scale,
+        sampler_name: generationSettings.sampler_name,
+        batch_size: generationSettings.batch_size,
         quality: 'low',
         background: 'opaque',
         label: 'South / Front Anchor',
@@ -1297,7 +1547,7 @@ async function generateSouthAnchor() {
       runtime.previews.sidebarAnimation = result.dataUrl;
       if (!runtime.referenceImage) {
         runtime.referenceImage = result.dataUrl;
-        runtime.referenceImageName = runtime.referenceImageName || 'openai-south-anchor.png';
+        runtime.referenceImageName = runtime.referenceImageName || `${runtime.provider}-south-anchor.png`;
         runtime.previews.reference = result.dataUrl;
       }
       runtime.lastError = '';
@@ -1392,11 +1642,20 @@ async function generateDirectionalAnchors() {
   setCurrentStage('directional');
   setStageStatus('directional', 'running', 'Generating NSEW anchors');
   try {
-    if (runtime.provider === 'openai') {
+    if (isRemoteProvider()) {
       const prompt = buildProductionPrompt('directional_anchors_nsew');
-      const result = await remoteGenerate(prompt, 'openai', {
+      const generationSettings = getLocalSdGenerationSettings();
+      const negativePrompt = getLocalSdPreset(promptBuilderState.localSdPresetId)?.negativePrompt || '';
+      const result = await remoteGenerate(prompt, runtime.provider, {
         stageId: 'directional_anchors_nsew',
-        size: '1024x1024',
+        size: `${generationSettings.width}x${generationSettings.height}`,
+        width: generationSettings.width,
+        height: generationSettings.height,
+        negative_prompt: negativePrompt,
+        steps: generationSettings.steps,
+        cfg_scale: generationSettings.cfg_scale,
+        sampler_name: generationSettings.sampler_name,
+        batch_size: generationSettings.batch_size,
         quality: 'low',
         background: 'opaque',
         label: 'Directional Anchors NSEW',
@@ -1481,11 +1740,20 @@ async function generatePoseBoard() {
   setStageStatus('animation', 'running', `Generating ${runtime.selectedAction} pose board`);
   addActivity(`Generating pose board for ${runtime.selectedAction}`, 'info');
   try {
-    if (runtime.provider === 'openai') {
+    if (isRemoteProvider()) {
       const prompt = buildProductionPrompt('action_pose_board', { actionName: runtime.selectedAction });
-      const result = await remoteGenerate(prompt, 'openai', {
+      const generationSettings = getLocalSdGenerationSettings();
+      const negativePrompt = getLocalSdPreset(promptBuilderState.localSdPresetId)?.negativePrompt || '';
+      const result = await remoteGenerate(prompt, runtime.provider, {
         stageId: 'action_pose_board_generation',
-        size: '1024x1024',
+        size: `${generationSettings.width}x${generationSettings.height}`,
+        width: generationSettings.width,
+        height: generationSettings.height,
+        negative_prompt: negativePrompt,
+        steps: generationSettings.steps,
+        cfg_scale: generationSettings.cfg_scale,
+        sampler_name: generationSettings.sampler_name,
+        batch_size: generationSettings.batch_size,
         quality: 'low',
         background: 'opaque',
         label: `Pose Board - ${runtime.selectedAction}`,
@@ -2022,7 +2290,13 @@ function bindButtons() {
     'promptPaletteLimit',
     'promptFootAnchor',
     'promptSheetColumns',
-    'promptSheetRows'
+    'promptSheetRows',
+    'localSdWidth',
+    'localSdHeight',
+    'localSdSteps',
+    'localSdCfgScale',
+    'localSdSamplerName',
+    'localSdBatchSize'
   ];
 
   promptInputIds.forEach((id) => {
@@ -2036,13 +2310,21 @@ function bindButtons() {
     });
   });
 
+  $('localSdPresetSelect')?.addEventListener('change', (event) => {
+    applyLocalSdPreset(event.target.value);
+  });
+  $('finalPromptOutput')?.addEventListener('input', () => {
+    updatePromptTextStateFromInputs();
+    renderPromptBuilder();
+  });
+  $('finalNegativePromptOutput')?.addEventListener('input', () => {
+    updatePromptTextStateFromInputs();
+    renderPromptBuilder();
+  });
+
   $('copyPromptBtn')?.addEventListener('click', copyPromptBuilderText);
   $('sendPromptBtn')?.addEventListener('click', sendPromptToProvider);
   $('resetPromptBtn')?.addEventListener('click', resetPromptBuilder);
-  $('stagePromptSelect')?.addEventListener('change', () => {
-    updatePromptBuilderStateFromInputs();
-    renderPromptBuilder();
-  });
   $('actionSelect')?.addEventListener('change', (event) => {
     applyPromptPreset(event.target.value);
     runtime.selectedAction = event.target.value;

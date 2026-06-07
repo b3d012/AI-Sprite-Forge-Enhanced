@@ -1,7 +1,7 @@
 {
   "name": "spriteforge",
   "version": "1.0.0",
-  "description": "Generate game sprites using OpenAI's image generation API",
+  "description": "Generate game sprites using local or hosted image backends",
   "type": "module",
   "scripts": {
     "start": "node server.js",
@@ -9,7 +9,7 @@
     "server": "nodemon server.js",
     "tailwind": "tailwindcss -i ./styles/input.css -o ./styles/output.css --watch",
     "build": "tailwindcss -i ./styles/input.css -o ./styles/output.css --minify",
-    "test": "npm run check",
+    "test": "npm run build && npm run test:mock && npm run test:ui",
     "test:unit": "vitest run --config vitest.config.mjs --reporter=dot tests/unit",
     "test:integration": "vitest run --config vitest.config.mjs --reporter=dot tests/integration",
     "test:mock": "npm run test:unit && npm run test:integration",
@@ -17,7 +17,7 @@
     "validate": "node scripts/validate.mjs",
     "check:real-api": "node scripts/check-real-api.mjs",
     "check:openai-smoke": "node scripts/check-real-api.mjs",
-    "check": "npm run build && npm run test:mock && npm run test:ui && node scripts/check-real-api.mjs",
+    "check": "npm run build && npm run test:mock && npm run test:ui",
     "postinstall": "npm run build",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d ."

@@ -154,6 +154,11 @@ describe('dashboard smoke', () => {
       expect(document.getElementById(id)).not.toBeNull();
     }
 
+    expect(document.getElementById('localSdPresetSelect')).not.toBeNull();
+    expect(document.getElementById('finalNegativePromptOutput')).not.toBeNull();
+    expect(document.getElementById('localSdWidth')).not.toBeNull();
+    expect(document.getElementById('localSdSamplerName')).not.toBeNull();
+
     expect(window.SpriteForgeDashboard).toBeTruthy();
 
     document.getElementById('runMockDemoBtn').click();

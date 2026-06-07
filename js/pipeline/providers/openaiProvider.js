@@ -1,3 +1,5 @@
+import { saveGeneratedImageArtifact } from '../../image/postprocess.js';
+
 async function blobFromInput(input) {
   if (!input) return null;
 
@@ -33,6 +35,14 @@ async function readJsonError(response) {
 
 function toDataUrlFromB64(b64, mimeType = 'image/png') {
   return `data:${mimeType};base64,${b64}`;
+}
+
+function slugify(value = 'image') {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'image';
 }
 
 async function blobToDataUrl(blob, mimeType = 'image/png') {
@@ -132,12 +142,14 @@ export class OpenAIImageProvider {
     apiKey = '',
     endpoint = 'https://api.openai.com/v1/images/edits',
     model = 'gpt-image-1',
+    outputDir = '',
     fetchImpl = globalThis.fetch?.bind(globalThis),
   } = {}) {
     this.mode = 'openai';
     this.apiKey = apiKey;
     this.endpoint = endpoint;
     this.model = model;
+    this.outputDir = outputDir;
     this.fetchImpl = fetchImpl;
   }
 
@@ -162,6 +174,9 @@ export class OpenAIImageProvider {
     background = 'opaque',
     stageId = 'openai-generate',
     model = this.model,
+    seed = '',
+    negative_prompt = '',
+    postprocess = {},
   } = {}) {
     this.ensureApiKey();
 
@@ -192,7 +207,34 @@ export class OpenAIImageProvider {
     }
 
     const result = await response.json();
-    return normalizeImageResponse(result, stageId, prompt, this.mode);
+    const normalized = await normalizeImageResponse(result, stageId, prompt, this.mode);
+    if (this.outputDir && normalized.dataUrl) {
+      const artifact = await saveGeneratedImageArtifact({
+        outputDir: this.outputDir,
+        baseName: `${Date.now()}-${slugify(stageId)}-${slugify(seed || 'random')}`,
+        dataUrl: normalized.dataUrl,
+        prompt: prompt || '',
+        negativePrompt: negative_prompt || '',
+        seed,
+        model,
+        backend: this.mode,
+        settings: {
+          size,
+          quality,
+          background,
+          endpoint: this.endpoint,
+          stageId,
+        },
+        postprocess,
+      });
+      normalized.outputDir = artifact.outputDir;
+      normalized.fileName = artifact.original?.fileName || null;
+      normalized.filePath = artifact.original?.filePath || null;
+      normalized.metadataPath = artifact.metadataPath || null;
+      normalized.outputPaths = artifact.outputPaths || [];
+      normalized.processedImage = artifact.processed || null;
+    }
+    return normalized;
   }
 
   async editImage({
@@ -200,8 +242,11 @@ export class OpenAIImageProvider {
     image,
     size = '1024x1024',
     quality = 'low',
-    background = 'transparent',
+    background = 'opaque',
     stageId = 'openai-edit',
+    seed = '',
+    negative_prompt = '',
+    postprocess = {},
   } = {}) {
     this.ensureApiKey();
 
@@ -238,7 +283,34 @@ export class OpenAIImageProvider {
     }
 
     const result = await response.json();
-    return normalizeImageResponse(result, stageId, prompt, this.mode);
+    const normalized = await normalizeImageResponse(result, stageId, prompt, this.mode);
+    if (this.outputDir && normalized.dataUrl) {
+      const artifact = await saveGeneratedImageArtifact({
+        outputDir: this.outputDir,
+        baseName: `${Date.now()}-${slugify(stageId)}-${slugify(seed || 'random')}`,
+        dataUrl: normalized.dataUrl,
+        prompt: prompt || '',
+        negativePrompt: negative_prompt || '',
+        seed,
+        model: this.model,
+        backend: this.mode,
+        settings: {
+          size,
+          quality,
+          background,
+          endpoint: this.endpoint,
+          stageId,
+        },
+        postprocess,
+      });
+      normalized.outputDir = artifact.outputDir;
+      normalized.fileName = artifact.original?.fileName || null;
+      normalized.filePath = artifact.original?.filePath || null;
+      normalized.metadataPath = artifact.metadataPath || null;
+      normalized.outputPaths = artifact.outputPaths || [];
+      normalized.processedImage = artifact.processed || null;
+    }
+    return normalized;
   }
 
   async renderImage(options = {}) {

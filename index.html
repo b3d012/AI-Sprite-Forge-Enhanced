@@ -451,6 +451,7 @@
                   <label class="label" for="providerSelect">Provider</label>
                   <select id="providerSelect" class="select">
                     <option value="mock">Mock</option>
+                    <option value="local">Local Stable Diffusion</option>
                     <option value="openai">OpenAI</option>
                   </select>
                 </div>
@@ -598,7 +599,7 @@
             <div class="card-header">
               <div>
                 <div class="card-title">Prompt Builder</div>
-                <p class="muted text-sm">Stage-aware prompt templates for production sprite planning and provider handoff.</p>
+                <p class="muted text-sm">Stage-aware prompt templates plus reusable local Stable Diffusion presets for sprite generation.</p>
               </div>
               <span class="badge section-status" id="promptBuilderStatus" data-status="not run">not run</span>
             </div>
@@ -611,6 +612,10 @@
                 <div class="field col-span-12 md:col-span-6">
                   <label class="label" for="promptProviderSelect">Provider</label>
                   <select id="promptProviderSelect" class="select"></select>
+                </div>
+                <div class="field col-span-12 md:col-span-6">
+                  <label class="label" for="localSdPresetSelect">Local SD preset</label>
+                  <select id="localSdPresetSelect" class="select"></select>
                 </div>
                 <div class="field col-span-12">
                   <label class="label">Action presets</label>
@@ -668,6 +673,39 @@
                 <div class="field col-span-12">
                   <label class="label" for="finalPromptOutput">Final prompt</label>
                   <textarea id="finalPromptOutput" class="input min-h-[280px] resize-y font-mono text-xs leading-5"></textarea>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label" for="finalNegativePromptOutput">Negative prompt</label>
+                  <textarea id="finalNegativePromptOutput" class="input min-h-[140px] resize-y font-mono text-xs leading-5"></textarea>
+                </div>
+                <div class="field col-span-12">
+                  <label class="label">Local SD settings</label>
+                  <div class="field-grid">
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdWidth">Width</label>
+                      <input id="localSdWidth" class="input" type="text" inputmode="numeric" />
+                    </div>
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdHeight">Height</label>
+                      <input id="localSdHeight" class="input" type="text" inputmode="numeric" />
+                    </div>
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdSteps">Steps</label>
+                      <input id="localSdSteps" class="input" type="text" inputmode="numeric" />
+                    </div>
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdCfgScale">CFG scale</label>
+                      <input id="localSdCfgScale" class="input" type="text" inputmode="decimal" />
+                    </div>
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdSamplerName">Sampler</label>
+                      <input id="localSdSamplerName" class="input" type="text" />
+                    </div>
+                    <div class="field col-span-12 md:col-span-4">
+                      <label class="label" for="localSdBatchSize">Batch size</label>
+                      <input id="localSdBatchSize" class="input" type="text" inputmode="numeric" />
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="button-row">

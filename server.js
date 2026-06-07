@@ -7,7 +7,9 @@ import { PipelineOrchestrator } from './js/pipeline/orchestrator.js';
 import { PIPELINE_STAGE_DEFINITIONS } from './js/pipeline/stages.js';
 import { MockImageProvider } from './js/pipeline/providers/mockProvider.js';
 import { OpenAIImageProvider } from './js/pipeline/providers/openaiProvider.js';
+import { Automatic1111ImageProvider } from './js/pipeline/providers/localStableDiffusionProvider.js';
 import { createPipelineState } from './js/pipeline/state.js';
+import { saveGeneratedImageArtifact } from './js/image/postprocess.js';
 
 dotenv.config();
 
@@ -18,6 +20,9 @@ const app = express();
 const port = process.env.PORT || 8080;
 const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
 const openaiApiKey = process.env.OPENAI_API_KEY || '';
+const automatic1111BaseUrl = process.env.AUTOMATIC1111_BASE_URL || process.env.A1111_BASE_URL || 'http://127.0.0.1:7860';
+const automatic1111DenoisingStrength = process.env.AUTOMATIC1111_DENOISING_STRENGTH || 0.55;
+const defaultProviderMode = process.env.IMAGE_PROVIDER || 'mock';
 const maxUploadBytes = Number.parseInt(process.env.MAX_UPLOAD_BYTES || `${10 * 1024 * 1024}`, 10);
 const GENERATION_STAGE_IDS = new Set([
   'anchor',
@@ -30,38 +35,135 @@ const GENERATION_STAGE_IDS = new Set([
   'action_pose_board_generation',
 ]);
 
+function slugify(value = 'image') {
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'image';
+}
+
+class SavingMockImageProvider extends MockImageProvider {
+  constructor(options = {}) {
+    super(options);
+    this.outputDir = options.outputDir || '';
+  }
+
+  async renderImage(options = {}) {
+    const result = await super.renderImage(options);
+    if (!this.outputDir || !result?.dataUrl) {
+      return result;
+    }
+
+    try {
+      const artifact = await saveGeneratedImageArtifact({
+        outputDir: this.outputDir,
+        baseName: `${Date.now()}-${slugify(result.stageId || options.stageId || 'mock')}-${slugify(options.seed || 'random')}`,
+        dataUrl: result.dataUrl,
+        prompt: options.prompt || '',
+        negativePrompt: '',
+        seed: options.seed || '',
+        model: 'mock',
+        backend: this.mode,
+        settings: {
+          width: result.width,
+          height: result.height,
+          stageId: result.stageId || options.stageId || 'mock-stage',
+        },
+        postprocess: options.postprocess || {},
+      });
+
+      return {
+        ...result,
+        fileName: artifact.original?.fileName || null,
+        filePath: artifact.original?.filePath || null,
+        outputDir: artifact.outputDir,
+        outputPaths: artifact.outputPaths || [],
+      };
+    } catch (error) {
+      console.warn('Unable to save mock output:', error);
+      return result;
+    }
+  }
+}
+
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 app.use(express.static(__dirname));
 
 function createProvider(mode = 'auto') {
+  const requestedMode = (mode || defaultProviderMode || 'auto').toLowerCase();
   const model = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+  const outputDir = process.env.OPENAI_OUTPUT_DIR || process.env.IMAGE_OUTPUT_DIR || '';
 
-  if (mode === 'openai' && openaiApiKey) {
+  if (requestedMode === 'local') {
+    return new Automatic1111ImageProvider({
+      baseUrl: automatic1111BaseUrl,
+      outputDir: process.env.AUTOMATIC1111_OUTPUT_DIR || process.env.IMAGE_OUTPUT_DIR || '',
+      timeoutMs: process.env.AUTOMATIC1111_TIMEOUT_MS || 120000,
+      denoisingStrength: automatic1111DenoisingStrength,
+    });
+  }
+
+  if (requestedMode === 'openai' && openaiApiKey) {
     return new OpenAIImageProvider({
       apiKey: openaiApiKey,
       endpoint: process.env.OPENAI_IMAGE_EDIT_ENDPOINT || 'https://api.openai.com/v1/images/edits',
       model,
+      outputDir,
     });
   }
 
-  if (mode === 'openai' && !openaiApiKey) {
+  if (requestedMode === 'openai' && !openaiApiKey) {
     const error = new Error('OPENAI_API_KEY is not configured on the server. Set it to use OpenAI mode.');
     error.code = 'missing_openai_api_key';
     error.status = 503;
     throw error;
   }
 
-  if (mode === 'auto' && openaiApiKey) {
+  if (requestedMode === 'auto' && defaultProviderMode === 'local') {
+    return new Automatic1111ImageProvider({
+      baseUrl: automatic1111BaseUrl,
+      outputDir: process.env.AUTOMATIC1111_OUTPUT_DIR || process.env.IMAGE_OUTPUT_DIR || '',
+      timeoutMs: process.env.AUTOMATIC1111_TIMEOUT_MS || 120000,
+      denoisingStrength: automatic1111DenoisingStrength,
+    });
+  }
+
+  if (requestedMode === 'auto' && openaiApiKey) {
     return new OpenAIImageProvider({
       apiKey: openaiApiKey,
       endpoint: process.env.OPENAI_IMAGE_EDIT_ENDPOINT || 'https://api.openai.com/v1/images/edits',
       model,
+      outputDir,
     });
   }
 
-  return new MockImageProvider();
+  return new SavingMockImageProvider({
+    outputDir: process.env.IMAGE_OUTPUT_DIR || '',
+  });
+}
+
+async function checkAutomatic1111Reachable(baseUrl = automatic1111BaseUrl) {
+  if (!baseUrl || typeof fetch !== 'function') {
+    return false;
+  }
+
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), 2000) : null;
+
+  try {
+    const response = await fetch(`${baseUrl.replace(/\/+$/, '')}/sdapi/v1/sd-models`, {
+      method: 'GET',
+      signal: controller?.signal,
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function createOrchestratorFromBody(body = {}) {
@@ -91,7 +193,11 @@ async function runOrchestratorEndpoint(res, body, stageId) {
     return res.json(result);
   } catch (error) {
     console.error(`Stage ${stageId} failed:`, error);
-    return sendApiError(res, error, error.status || (error.code === 'missing_openai_api_key' ? 503 : 500));
+    return sendApiError(
+      res,
+      error,
+      error.status || (error.code === 'missing_openai_api_key' || error.code === 'local_stable_diffusion_unavailable' ? 503 : 500)
+    );
   }
 }
 
@@ -100,11 +206,20 @@ async function runProviderEndpoint(res, body = {}, stageId = 'client-edit') {
     const provider = createProvider(body.providerMode || body.provider || 'auto');
     const imageDataUrl = body.imageDataUrl || body.image || body.inputImage || '';
     const prompt = body.prompt || '';
+    const negativePrompt = body.negative_prompt || body.negativePrompt || body.options?.negative_prompt || body.options?.negativePrompt || '';
     const size = body.size || body.options?.size || '1024x1024';
+    const width = body.width || body.options?.width || undefined;
+    const height = body.height || body.options?.height || undefined;
+    const steps = body.steps || body.options?.steps || 20;
+    const cfgScale = body.cfg_scale || body.cfgScale || body.options?.cfg_scale || body.options?.cfgScale || 7;
+    const samplerName = body.sampler_name || body.samplerName || body.options?.sampler_name || body.options?.samplerName || 'Euler a';
+    const batchSize = body.batch_size || body.batchSize || body.options?.batch_size || body.options?.batchSize || 1;
+    const denoisingStrength = body.denoising_strength ?? body.denoisingStrength ?? body.options?.denoising_strength ?? body.options?.denoisingStrength ?? automatic1111DenoisingStrength;
     const quality = body.quality || body.options?.quality || 'low';
-    const background = body.background || body.options?.background || 'transparent';
+    const background = body.background || body.options?.background || 'opaque';
     const label = body.label || stageId;
-    const seed = body.seed || body.options?.seed || '';
+    const seed = body.seed ?? body.options?.seed ?? '';
+    const postprocess = body.postprocess || body.options?.postprocess || {};
 
     if (!prompt.trim() && stageId !== 'recover-frames' && stageId !== 'pixel-snap') {
       return sendApiError(res, { message: 'Prompt is required.', code: 'invalid_prompt' }, 400);
@@ -123,20 +238,62 @@ async function runProviderEndpoint(res, body = {}, stageId = 'client-edit') {
 
     const isGeneration = GENERATION_STAGE_IDS.has(stageId);
     const result = isGeneration
-      ? await provider.generateImage({ prompt, size, quality, background, stageId, seed, width: 1024, height: 1024, label })
-      : await provider.editImage({ prompt, image: imageDataUrl, size, quality, background, stageId, seed, label });
+      ? await provider.generateImage({
+        prompt,
+        negative_prompt: negativePrompt,
+        size,
+        quality,
+        background,
+        stageId,
+        seed,
+        width,
+        height,
+        steps,
+        cfg_scale: cfgScale,
+        sampler_name: samplerName,
+        batch_size: batchSize,
+        label,
+        postprocess,
+      })
+      : await provider.editImage({
+        prompt,
+        image: imageDataUrl,
+        size,
+        width,
+        height,
+        steps,
+        cfg_scale: cfgScale,
+        sampler_name: samplerName,
+        batch_size: batchSize,
+        denoising_strength: denoisingStrength,
+        quality,
+        background,
+        stageId,
+        seed,
+        label,
+        negative_prompt: negativePrompt,
+        postprocess,
+      });
 
     return res.json({ ok: true, ...result });
   } catch (error) {
     console.error(`Provider stage ${stageId} failed:`, error);
-    return sendApiError(res, error, error.status || (error.code === 'missing_openai_api_key' ? 503 : 500));
+    return sendApiError(
+      res,
+      error,
+      error.status || (error.code === 'missing_openai_api_key' || error.code === 'local_stable_diffusion_unavailable' ? 503 : 500)
+    );
   }
 }
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req, res) => {
+  const automatic1111Running = await checkAutomatic1111Reachable();
+  const provider = defaultProviderMode === 'local' ? 'local' : openaiApiKey ? 'openai-or-mock' : 'mock';
   res.json({
     status: 'ok',
-    provider: openaiApiKey ? 'openai-or-mock' : 'mock',
+    provider,
+    automatic1111BaseUrl,
+    automatic1111Configured: automatic1111Running,
     openaiConfigured: !!openaiApiKey,
   });
 });
@@ -189,7 +346,11 @@ app.post('/api/pipeline/stages/:stageId/run', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Stage run failed:', error);
-    return sendApiError(res, error, error.status || 500);
+    return sendApiError(
+      res,
+      error,
+      error.status || (error.code === 'missing_openai_api_key' || error.code === 'local_stable_diffusion_unavailable' ? 503 : 500)
+    );
   }
 });
 
@@ -208,7 +369,11 @@ app.post('/api/pipeline/run', async (req, res) => {
     return res.json(result);
   } catch (error) {
     console.error('Pipeline run failed:', error);
-    return sendApiError(res, error, error.status || 500);
+    return sendApiError(
+      res,
+      error,
+      error.status || (error.code === 'missing_openai_api_key' || error.code === 'local_stable_diffusion_unavailable' ? 503 : 500)
+    );
   }
 });
 
@@ -219,11 +384,16 @@ app.post('/api/generate-sprite', async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error('Legacy sprite generation failed:', error);
-    return sendApiError(res, error, error.status || 500);
+    return sendApiError(
+      res,
+      error,
+      error.status || (error.code === 'missing_openai_api_key' || error.code === 'local_stable_diffusion_unavailable' ? 503 : 500)
+    );
   }
 });
 
 app.listen(port, host, () => {
   console.log(`Server running at http://${host}:${port}`);
-  console.log(`Provider mode: ${openaiApiKey ? 'openai available' : 'mock only'}`);
+  console.log(`Provider mode: ${defaultProviderMode}`);
+  console.log(`Automatic1111 base URL: ${automatic1111BaseUrl}`);
 });

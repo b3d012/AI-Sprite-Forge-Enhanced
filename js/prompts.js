@@ -11,9 +11,13 @@ import {
   buildPipelinePrompt,
   DEFAULT_PROMPT_VALUES,
   getActionPresetOptions,
+  getLocalSdPresetOptions,
+  getLocalSdPreset,
   getPromptTemplateOptions,
   PROMPT_TEMPLATES,
-  ACTION_PRESET_MAP
+  ACTION_PRESET_MAP,
+  LOCAL_SD_PRESET_LIST,
+  LOCAL_SD_PRESET_MAP
 } from './prompts/buildPrompt.js';
 
 export {
@@ -21,9 +25,13 @@ export {
   buildPipelinePrompt,
   DEFAULT_PROMPT_VALUES,
   getActionPresetOptions,
+  getLocalSdPresetOptions,
+  getLocalSdPreset,
   getPromptTemplateOptions,
   PROMPT_TEMPLATES,
-  ACTION_PRESET_MAP
+  ACTION_PRESET_MAP,
+  LOCAL_SD_PRESET_LIST,
+  LOCAL_SD_PRESET_MAP
 };
 
 // Common constants and helpers

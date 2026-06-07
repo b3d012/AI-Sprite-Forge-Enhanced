@@ -76,14 +76,25 @@ async function requestProviderImage(payload = {}) {
   return responsePayload;
 }
 
-export async function remoteEdit(prompt, imageDataUrl, providerMode = 'auto') {
+export async function remoteEdit(prompt, imageDataUrl, providerMode = 'auto', options = {}) {
   const payload = await requestProviderImage({
     prompt,
     imageDataUrl,
+    negative_prompt: options.negative_prompt || '',
     model: 'gpt-image-1',
-    size: '1024x1024',
-    quality: 'low',
-    background: 'opaque',
+    size: options.size || '1024x1024',
+    width: options.width,
+    height: options.height,
+    steps: options.steps,
+    cfg_scale: options.cfg_scale,
+    sampler_name: options.sampler_name,
+    seed: options.seed ?? '',
+    denoising_strength: options.denoising_strength,
+    batch_size: options.batch_size,
+    quality: options.quality || 'low',
+    background: options.background || 'opaque',
+    label: options.label || '',
+    postprocess: options.postprocess || undefined,
     providerMode,
   });
 
@@ -96,16 +107,24 @@ export async function remoteGenerate(prompt, providerMode = 'openai', options = 
     providerMode,
     stageId: options.stageId || 'south_front_anchor_generation',
     size: options.size || '1024x1024',
+    width: options.width,
+    height: options.height,
+    negative_prompt: options.negative_prompt || '',
+    steps: options.steps,
+    cfg_scale: options.cfg_scale,
+    sampler_name: options.sampler_name,
+    seed: options.seed ?? '',
+    batch_size: options.batch_size,
     quality: options.quality || 'low',
     background: options.background || 'opaque',
     label: options.label || '',
-    seed: options.seed || '',
+    postprocess: options.postprocess || undefined,
   });
 
   return payload;
 }
 
-export async function callOpenAIEdit(prompt, imageFile, apiKey) {
+export async function callOpenAIEdit(prompt, imageFile, apiKey, options = {}) {
   const state = getState();
 
   if (!(imageFile instanceof File || imageFile instanceof Blob)) {
@@ -113,7 +132,7 @@ export async function callOpenAIEdit(prompt, imageFile, apiKey) {
   }
 
   const imageDataUrl = await readFileAsDataURL(imageFile);
-  return remoteEdit(prompt, imageDataUrl, state.provider?.mode || 'auto');
+  return remoteEdit(prompt, imageDataUrl, state.provider?.mode || 'auto', options);
 }
 
 export async function generateSpriteStyles(imageFile) {

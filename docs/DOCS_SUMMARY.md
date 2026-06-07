@@ -5,6 +5,7 @@ This folder is the shortest path to understanding the fork.
 ## Read First
 
 - `README.md` explains what the project is, how to start it, and where the outputs go.
+- `docs/LOCAL_AUTOMATIC1111.md` explains how to run the free local AUTOMATIC1111 backend without the OpenAI image API.
 - `docs/MOCK_MODE.md` explains how to use the app without an API key.
 - `docs/PIPELINE.md` explains the sprite pipeline from anchor selection to export.
 

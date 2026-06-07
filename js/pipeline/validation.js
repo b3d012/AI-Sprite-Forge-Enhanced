@@ -53,7 +53,7 @@ export function validateReferenceUpload(state) {
 
 export function validateProviderSelection(state) {
   const mode = state?.provider?.mode || 'mock';
-  if (!['mock', 'openai'].includes(mode)) {
+  if (!['mock', 'openai', 'local'].includes(mode)) {
     return createValidationResult(
       STAGE_VALIDATION_STATUS.WARNING,
       `Unknown provider mode "${mode}". Falling back to mock mode.`
@@ -93,4 +93,3 @@ export function aggregatePipelineStatus(state) {
 
   return PIPELINE_STATUS.READY;
 }
-

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 import {
   chromaKeyToAlpha,
@@ -12,6 +15,13 @@ import {
   rekeyTransparentToChroma,
   validatePixelArtImage,
 } from '../js/image/index.js';
+import {
+  applySpritePostProcessing,
+  cropImageLike,
+  fitImageToCanvas,
+  saveGeneratedImageArtifact,
+  encodePngDataUrl,
+} from '../js/image/postprocess.js';
 
 function makeImage(width, height, fill = [0, 255, 0, 255]) {
   const data = new Uint8ClampedArray(width * height * 4);
@@ -34,6 +44,10 @@ function fillRect(image, x0, y0, w, h, color) {
       image.data[idx + 3] = color[3];
     }
   }
+}
+
+function imageToPngDataUrl(image) {
+  return encodePngDataUrl(image);
 }
 
 test('detects chroma background on a mostly green sprite', () => {
@@ -160,4 +174,75 @@ test('validation returns warnings for common sprite issues', () => {
   assert.equal(validation.valid, false);
   assert.ok(validation.warnings.length >= 1);
   assert.ok(validation.stats.uniqueColors > 4);
+});
+
+test('cropping keeps the character bounds with padding', () => {
+  const image = makeImage(12, 12);
+  fillRect(image, 4, 5, 3, 2, [255, 0, 0, 255]);
+
+  const cropped = cropImageLike(image, {
+    target: '#00FF00',
+    padding: 1,
+  });
+
+  assert.equal(cropped.width, 5);
+  assert.equal(cropped.height, 4);
+  assert.equal(cropped.data[(1 * cropped.width + 1) * 4], 255);
+});
+
+test('resizing preserves aspect ratio inside a target canvas', () => {
+  const image = makeImage(2, 1);
+  image.data[0] = 255;
+  image.data[3] = 255;
+  image.data[4] = 0;
+  image.data[5] = 0;
+  image.data[6] = 255;
+  image.data[7] = 255;
+
+  const resized = fitImageToCanvas(image, {
+    width: 4,
+    height: 4,
+    background: '#00FF00',
+  });
+
+  assert.equal(resized.width, 4);
+  assert.equal(resized.height, 4);
+  assert.equal(resized.data[0], 0);
+  assert.equal(resized.data[1], 255);
+  assert.equal(resized.data[2], 0);
+  assert.equal(resized.data[(2 * 4 + 1) * 4], 255);
+});
+
+test('post-processing can keep chroma green and save a separate variant', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'spriteforge-postprocess-'));
+  const image = makeImage(4, 4, [0, 0, 0, 0]);
+  fillRect(image, 1, 1, 2, 2, [255, 0, 0, 255]);
+
+  const artifact = await saveGeneratedImageArtifact({
+    outputDir: tempDir,
+    baseName: 'sprite-test',
+    dataUrl: imageToPngDataUrl(image),
+    prompt: 'Test prompt',
+    negativePrompt: 'blur',
+    seed: 123,
+    model: 'test-model',
+    backend: 'test-backend',
+    settings: { size: '4x4' },
+    postprocess: {
+      keepChromaGreenBackground: true,
+    },
+  });
+
+  await assert.doesNotReject(() => fs.access(path.join(tempDir, 'sprite-test.png')));
+  await assert.doesNotReject(() => fs.access(path.join(tempDir, 'sprite-test.json')));
+  await assert.doesNotReject(() => fs.access(path.join(tempDir, 'sprite-test-processed.png')));
+  await assert.doesNotReject(() => fs.access(path.join(tempDir, 'sprite-test-processed.json')));
+
+  const metadata = JSON.parse(await fs.readFile(path.join(tempDir, 'sprite-test.json'), 'utf8'));
+  assert.equal(metadata.prompt, 'Test prompt');
+  assert.equal(metadata.negativePrompt, 'blur');
+  assert.equal(metadata.seed, 123);
+  assert.equal(metadata.model, 'test-model');
+  assert.equal(metadata.backend, 'test-backend');
+  assert.equal(artifact.outputPaths.length >= 3, true);
 });

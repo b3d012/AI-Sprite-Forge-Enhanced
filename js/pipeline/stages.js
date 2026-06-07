@@ -260,7 +260,7 @@ export const PIPELINE_STAGE_DEFINITIONS = [
           },
         },
         context.provider?.mode === 'mock'
-          ? withValidationWarning('Mock provider used. Replace with OpenAI or another generator when ready.', { provider: 'mock' })
+          ? withValidationWarning('Mock provider used. Replace with OpenAI, AUTOMATIC1111, or another generator when ready.', { provider: 'mock' })
           : createValidationResult(STAGE_VALIDATION_STATUS.PASSED, 'South/front anchor generated.')
       );
     },

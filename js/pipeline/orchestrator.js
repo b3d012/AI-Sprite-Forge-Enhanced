@@ -11,6 +11,7 @@ import { aggregatePipelineStatus, toFriendlyError, validateStageResult } from '.
 import { loadPipelineState, savePipelineState } from './storage.js';
 import { MockImageProvider } from './providers/mockProvider.js';
 import { OpenAIImageProvider } from './providers/openaiProvider.js';
+import { Automatic1111ImageProvider } from './providers/localStableDiffusionProvider.js';
 
 function mergeDeep(target, source) {
   if (!source) return target;
@@ -30,12 +31,25 @@ function mergeDeep(target, source) {
 function buildProvider(state, options = {}) {
   const mode = options.mode || state.provider?.mode || 'mock';
   const apiKey = options.apiKey || state.provider?.apiKey || '';
+  const baseUrl = options.baseUrl || state.provider?.baseUrl || process.env.AUTOMATIC1111_BASE_URL || 'http://127.0.0.1:7860';
+  const denoisingStrength = options.denoisingStrength || state.provider?.denoisingStrength || process.env.AUTOMATIC1111_DENOISING_STRENGTH || 0.55;
 
   if (mode === 'openai' && apiKey) {
     return new OpenAIImageProvider({
       apiKey,
       endpoint: options.endpoint,
       model: options.model,
+      fetchImpl: options.fetchImpl,
+    });
+  }
+
+  if (mode === 'local') {
+    return new Automatic1111ImageProvider({
+      baseUrl,
+      endpoint: options.localEndpoint,
+      outputDir: options.outputDir,
+      timeoutMs: options.timeoutMs,
+      denoisingStrength,
       fetchImpl: options.fetchImpl,
     });
   }
@@ -102,6 +116,7 @@ export class PipelineOrchestrator {
     this.state.provider = {
       ...this.state.provider,
       mode: this.provider.mode || 'mock',
+      baseUrl: this.provider.baseUrl || this.state.provider?.baseUrl || '',
     };
     this.persist();
   }
@@ -318,4 +333,3 @@ export class PipelineOrchestrator {
 export function createOrchestrator(options = {}) {
   return new PipelineOrchestrator(options);
 }
-

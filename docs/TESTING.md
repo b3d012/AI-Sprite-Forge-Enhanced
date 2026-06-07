@@ -27,7 +27,8 @@ This is the best first pass for new developers.
    - upload controls render
    - preview placeholders show up
    - mock pipeline buttons remain usable in Mock mode
-   - OpenAI mode shows a helpful server-side missing-key message when `OPENAI_API_KEY` is not set
+   - Local Stable Diffusion mode shows a helpful server-side missing-service message when AUTOMATIC1111 is not running
+   - OpenAI image API is not required for the local Stable Diffusion path
 
 ### Expected Output
 
@@ -35,6 +36,7 @@ This is the best first pass for new developers.
 - the dashboard layout is visible
 - style preview images load from `media/style_previews/`
 - no OpenAI request is attempted until a key is provided
+- local generations save files into `outputs/generated/` when that folder does not already exist
 - `Mock Demo Run` completes and export buttons produce `spritesheet.png`, `manifest.json`, and `validation-report.json`
 
 ## 2. Automated Checks
@@ -53,24 +55,26 @@ Expected results:
 - unit, integration, and UI smoke tests pass
 - validation writes `VALIDATION_REPORT.md` and artifacts under `artifacts/validation/`
 
-## 3. Optional Real API Test
+## 3. Optional Local Stable Diffusion Test
 
-Use this only when you want to confirm the OpenAI path.
+Use this to confirm the free local generation path.
 
 ### Steps
 
-1. Set `OPENAI_API_KEY` in your shell or environment
-2. Restart the server so it can read the updated environment
-3. Upload a reference image only if you are testing an edit stage
-4. Generate a scratch anchor or action board in OpenAI mode, or run the smoke check script
+1. Start AUTOMATIC1111 with `--api`
+2. Set `IMAGE_PROVIDER=local` and `AUTOMATIC1111_BASE_URL=http://127.0.0.1:7860`
+3. Restart the server so it can read the updated environment
+4. Open the dashboard and select Local Stable Diffusion in the provider dropdown
+5. Generate a scratch anchor or action board in Local Stable Diffusion mode
 
 ### Expected Output
 
 - a generated sprite image appears in the preview area
+- the local AUTOMATIC1111 endpoints return images from `/sdapi/v1/txt2img` and `/sdapi/v1/img2img`
 - frame downloads become available
 - ZIP download buttons work when frames are produced
 - transparent-background prompts produce transparent or near-transparent results depending on model output
-- `npm run check:openai-smoke` passes when the key is available
+- `npm run check:openai-smoke` remains available as an optional OpenAI smoke check when the key is available
 
 ## 4. Manual Checks To Run Every Time
 
@@ -85,6 +89,7 @@ Use this only when you want to confirm the OpenAI path.
 ### Missing API Key
 
 If OpenAI mode is selected without `OPENAI_API_KEY`, the dashboard should show a clear warning and keep working in Mock mode.
+If Local Stable Diffusion mode is selected while AUTOMATIC1111 is not running, the dashboard should show the simple local warning and keep working.
 
 ### Blank Or Broken Preview
 

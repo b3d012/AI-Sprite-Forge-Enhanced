@@ -12,6 +12,7 @@ AI Sprite Forge Enhanced is a fork of SpriteForge that combines a web sprite-gen
 It supports two operating modes:
 
 - Mock mode for running the app without an API key
+- Local Stable Diffusion mode when AUTOMATIC1111 is running with `--api`
 - OpenAI mode when `OPENAI_API_KEY` is configured on the server
 
 The project is centered around sprite workflows that produce game-ready outputs, including spritesheets, `manifest.json`, and preview assets.
@@ -62,7 +63,25 @@ If you clone the repo without the media folder or want fresher captures, replace
 
 ### Mock Mode
 
-Mock mode is the no-key workflow. It is the safest way to explore the dashboard, run the full deterministic pipeline, inspect the style library, and export sample assets without setting up OpenAI access first. Live sprite generation is reserved for OpenAI mode.
+Mock mode is the no-key workflow. It is the safest way to explore the dashboard, run the full deterministic pipeline, inspect the style library, and export sample assets without setting up OpenAI access first.
+
+For live image generation, the free local Stable Diffusion path is the recommended option when you do not want to use the OpenAI image API.
+
+### Local Stable Diffusion Mode
+
+This is the free local image-generation path. It uses AUTOMATIC1111 running on your machine, so the OpenAI image API is not required.
+
+See [docs/LOCAL_AUTOMATIC1111.md](./docs/LOCAL_AUTOMATIC1111.md) for the full setup guide.
+
+Start AUTOMATIC1111 locally with the API enabled:
+
+```bash
+webui-user.bat --api
+```
+
+or the equivalent launch argument on your platform. Then set `IMAGE_PROVIDER=local` and `AUTOMATIC1111_BASE_URL=http://127.0.0.1:7860` in your environment. You can also tune `AUTOMATIC1111_DENOISING_STRENGTH` if you want stronger or weaker image-to-image transformation; the default is `0.55`. Generated images are saved into `outputs/generated/` when the folder does not already exist.
+
+The local provider supports both `txt2img` and `img2img` through AUTOMATIC1111's `/sdapi/v1/txt2img` and `/sdapi/v1/img2img` endpoints.
 
 ### OpenAI Mode
 

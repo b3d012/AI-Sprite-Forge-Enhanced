@@ -1,6 +1,17 @@
 # API
 
-This repository uses a browser dashboard plus a local Node server for OpenAI-backed generation.
+This repository uses a browser dashboard plus a local Node server for mock, local AUTOMATIC1111, and optional OpenAI-backed generation.
+
+## Local Stable Diffusion Mode
+
+The server can call AUTOMATIC1111 through its local REST API.
+
+- Endpoint: `/api/pipeline/providers/edit`
+- Set `providerMode=local`
+- The base URL comes from `AUTOMATIC1111_BASE_URL`
+- Prompt-only requests still use `http://127.0.0.1:7860/sdapi/v1/txt2img`
+- Reference-image edits use `http://127.0.0.1:7860/sdapi/v1/img2img`
+- OpenAI image API keys are not required for this mode
 
 ## OpenAI Mode
 
@@ -28,13 +39,16 @@ The dashboard no longer depends on a saved client-side API key for OpenAI calls.
 
 ## Environment Variables
 
-`server.js` reads `OPENAI_API_KEY` through `dotenv`.
+`server.js` reads `OPENAI_API_KEY` and AUTOMATIC1111 settings through `dotenv`.
 
 Important note:
 
 - the Node server is the only place that should know the OpenAI secret
 - `OPENAI_IMAGE_MODEL` can override the default image model
 - `OPENAI_IMAGE_EDIT_ENDPOINT` can override the edit endpoint
+- `AUTOMATIC1111_BASE_URL` can point to a local or LAN-hosted AUTOMATIC1111 instance
+- `AUTOMATIC1111_TIMEOUT_MS` can limit how long the server waits for a response
+- `AUTOMATIC1111_DENOISING_STRENGTH` controls the default img2img strength when a source image is provided
 
 ## Worker Path
 
@@ -57,6 +71,7 @@ That path is useful because it shows the intended production animation flow:
 ## Common Failure Modes
 
 - missing API key on the server
+- AUTOMATIC1111 not running or API disabled
 - unsupported or expired model access
 - invalid image format
 - unexpected response payload shape
